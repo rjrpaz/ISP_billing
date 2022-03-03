@@ -1,0 +1,185 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+
+$url = "$server/radadm/modificacion-adm.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Administraci&oacute;n de Operadores - Modificaci&oacute;n", "#ffffff");
+
+if ($http_referer =~ m/$url/)
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $modificar = param('modificar');
+	my @niveles = ();
+	my @grupos = ();
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	if ((&obtener_nivel($wwwuser)) ne "Acceso Total")
+	{
+		&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+	}
+
+	if ($modificar ne "")
+	{
+		$dbh = Mysql->connect($host, $database, $dbuser, $dbpass);
+		$errmsg = Mysql->errmsg();
+		if ($errmsg ne "")
+		{
+			&return_error_mysql ("Error en el proceso", "Existi&oacute; al intentarse la conexi&oacute;n a la Base de Datos.<BR>Consulte al Administrador de la misma", $errmsg);
+		}
+
+		$sql_statement = "SELECT usuarios.Password, usuarios.Nombre, usuarios.Nivel, grupos.Nombre FROM usuarios LEFT JOIN grupos ON (usuarios.Grupo_ID = grupos.ID) WHERE usuarios.Username LIKE '".$modificar."'";
+
+		$sth = $dbh->query($sql_statement)
+		or die &return_error_mysql ("Error en el proceso", "Hubo un error en la consulta a la Base de Datos.<BR>Consulte al Administrador de la misma", $dbh->errmsg());
+		
+		@arr = $sth->fetchrow;
+
+		print <<body;
+  <FORM ACTION="modificacion-adm-final.html" METHOD="post\">
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <INPUT TYPE="hidden" NAME="usuario" VALUE="$modificar">
+   <TABLE COOL BORDER="1" CELLPADDING="0" CELLSPACING="0" ALIGN="center">
+    <TR>
+     <TD ALIGN="center" COLSPAN="2">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+       Operador
+       &nbsp;
+       <B>
+        $modificar : 
+       </B>
+       &nbsp;
+       Modifique los campos que asi lo requieran
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Contrase&ntilde;a:
+        <BR>
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       <INPUT TYPE="text" NAME="password" VALUE="$arr[0]" SIZE="60">
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Nombre:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       <INPUT TYPE="text" NAME="nombre" VALUE="$arr[1]" SIZE="60">
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Nivel:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <SELECT NAME="nivel">
+body
+		@niveles = &listar_niveles();
+		foreach $niveles (@niveles)
+		{
+			print "         <OPTION ";
+			if ($niveles eq $arr[2])
+			{
+				print " SELECTED";
+			}
+			print ">$niveles\n";
+		}
+
+		print <<body;
+        </SELECT>
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Grupo de Usuarios:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <SELECT NAME="grupo">
+body
+		@grupos = &listar_grupos();
+		foreach $grupos (@grupos)
+		{
+			print "         <OPTION ";
+			if ($grupos eq $arr[3])
+			{
+				print " SELECTED";
+			}
+			print ">$grupos\n";
+		}
+
+		print <<body;
+        </SELECT>
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="Confirmar">
+        &nbsp; &nbsp; &nbsp;
+        <INPUT TYPE="reset" VALUE="Limpiar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body
+	}
+	else
+	{
+		&return_error_mysql ("Error en el proceso", "No se ingreso un elemento para modificar", $dbh->errmsg());
+	}
+}
+else
+{
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/radadm/index.html");
+exit(0);

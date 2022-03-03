@@ -1,0 +1,63 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+
+$url = "$server/radadm/alta-agentes.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Administraci&oacute;n de Agentes de Ventas - Alta", "#ffffff");
+
+if ($http_referer =~ m/$url/)
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $nombre = param('nombre');
+	my $direccion = param('direccion');
+	my $telefono = param('telefono');
+	my $localidad = param('localidad');
+	my $descripcion = param('descripcion');
+	my $usuario = param('usuario');
+	my $password = param('password');
+	my $grupo = param('grupo');
+	my $usuario_id = 0;
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	if ((&obtener_nivel($wwwuser)) ne "Acceso Total")
+	{
+		&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+	}
+
+	&alta_usuarios($usuario, $password, $nombre, "Tareas de Consulta", $grupo);
+
+	$usuario_id = &usuario_existente_usuarios($usuario);
+
+	&alta_agentes($nombre, $direccion, $telefono, $localidad, $descripcion, $usuario_id);
+
+	&insertar_log ($wwwuser, "Alta de Agentes de Ventas", "Nombre: $nombre, Direccion: $direccion, Telefono: $telefono, Localidad: $localidad, Descripcion: $descripcion, Grupo: $grupo");
+
+
+print <<body;
+
+  <DIV ALIGN="center">
+   <B>
+    <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+     Hecho ...
+    </FONT>
+   </B>
+  </DIV>
+
+body
+}
+else
+{
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/radadm/index.html");
+
+exit(0);

@@ -1,0 +1,83 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+
+$url = "$server/radadm/maildir.html";
+$url_1 = "$server/radadm/maildir-consulta.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Administraci&oacute;n de Usuarios - Acceso al Mail de un Usuario", "#ffffff");
+
+if ($http_referer =~ m/$url/)
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $consultar = param('consultar');
+	my $nivel = "";
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	$nivel = &obtener_nivel($wwwuser);
+	if ($nivel eq "Tareas de Consulta")
+	{
+		&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+	}
+	&menu_maildir($wwwuser, $wwwpass, $consultar);
+
+}
+elsif ($http_referer =~ m/$url_1/)
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $consultar = param('consultar');
+	my $nivel = "";
+	my $maildir = "";
+	my @maildir = ();
+	my $mail = "";
+	my $borrar = "";
+	my $comando = "";
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	$nivel = &obtener_nivel($wwwuser);
+	if ($nivel eq "Tareas de Consulta")
+	{
+		&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+	}
+
+	$maildir[0] = "/home/".$consultar."/Maildir/cur/";
+	$maildir[1] = "/home/".$consultar."/Maildir/new/";
+
+	foreach $maildir (@maildir)
+	{
+		open (MAILLIST, "ls $maildir |");
+		while (<MAILLIST>)
+		{
+			chop;
+			$mail = $maildir.$_;
+			$borrar = param($mail);
+			if ($borrar eq "on")
+			{
+				$comando = "rm -f ".$mail;
+				system($comando);
+			}
+		}
+		close (MAILLIST);
+	}
+
+	&menu_maildir($wwwuser, $wwwpass, $consultar);
+}
+else
+{
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/radadm/index.html");
+exit(0);

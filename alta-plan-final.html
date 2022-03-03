@@ -1,0 +1,59 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+
+$url = "$server/radadm/alta-plan.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Definici&oacute;n de Planes - Alta", "#ffffff");
+
+if ($http_referer =~ m/$url/)
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $nombre = param('nombre');
+	my $primer_vencimiento = param('primer_vencimiento');
+	my $segundo_vencimiento = param('segundo_vencimiento');
+	my $tercer_vencimiento = param('tercer_vencimiento');
+	my $cantidad_accesos_simultaneos = param('cantidad_accesos_simultaneos');
+	my $cantidad_horas = param('cantidad_horas');
+	my $cantidad_e_mail = param('cantidad_e_mail');
+	my $costo_tiempo_excedente = param('costo_tiempo_excedente');
+	my $incluye_navegacion = param('incluye_navegacion');
+	my $incluye_hosting = param('incluye_hosting');
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	if ((&obtener_nivel($wwwuser)) ne "Acceso Total")
+	{
+		&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+	}
+
+	&alta_plan($nombre, $primer_vencimiento, $segundo_vencimiento, $tercer_vencimiento, $cantidad_accesos_simultaneos, $cantidad_horas, $cantidad_e_mail, $costo_tiempo_excedente, $incluye_navegacion, $incluye_hosting);
+
+	&insertar_log ($wwwuser, "Alta de Plan", "Nombre: $nombre, Primer Vencimiento: $primer_vencimiento, Segundo Vencimiento: $segundo_vencimiento, Tercer Vencimiento: $tercer_vencimiento, Cantidad de Accesos Simultaneos: $cantidad_accesos_simultaneos, Cantidad de Horas: $cantidad_horas, Cantidad de E-mails: $cantidad_e_mail, Costo Tiempo Excedente: $costo_tiempo_excedente, Incluye Navegacion?: $incluye_navegacion, Incluye Hosting?: $incluye_hosting");
+
+print <<body;
+
+  <DIV ALIGN="center">
+   <B>
+    <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+     Hecho ...
+    </FONT>
+   </B>
+  </DIV>
+
+body
+}
+else
+{
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/radadm/index.html");
+
+exit(0);

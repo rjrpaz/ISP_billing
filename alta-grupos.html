@@ -1,0 +1,131 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+
+$url = "$server/radadm/abm-grupos.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Definici&oacute;n de Grupos de Usuarios - Alta", "#ffffff");
+
+if ($http_referer =~ m/$url/)
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $nombre = param('nombre');
+	my $dominio = param('dominio');
+	my $descripcion = param('descripcion');
+	my $nivel = param('nivel');
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	if ((&obtener_nivel($wwwuser)) ne "Acceso Total")
+	{
+		&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+	}
+
+	if ($nombre eq "")
+	{
+		&return_error_mysql ("Error en el proceso", "No se ingres&oacute; nombre de grupo", "")
+	}
+
+	############################################
+	# Chequea si el username ya esta utilizado #
+	############################################
+	if (&grupo_existente($nombre))
+	{
+		&return_error_mysql ("Error en el proceso", "El nombre de grupo <b> $nombre </b> ya est&aacute; ocupado", "")
+	}
+
+	print <<body_alta;
+
+  <FORM ACTION="alta-grupos-final.html" METHOD="post\">
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <INPUT TYPE="hidden" NAME="nombre" VALUE="$nombre">
+   <INPUT TYPE="hidden" NAME="dominio" VALUE="$dominio">
+   <INPUT TYPE="hidden" NAME="descripcion" VALUE="$descripcion">
+   <TABLE COOL BORDER="1" CELLPADDING="0" CELLSPACING="0" ALIGN="center">
+
+    <TR>
+     <TD ALIGN="left" COLSPAN="2">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+        Datos del Grupo (Confirmaci&oacute;n)
+        <BR>
+        Confirmar los datos:
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Nombre:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $nombre
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Dominio:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $dominio
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Descripci&oacute;n:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $descripcion
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="Confirmar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body_alta
+}
+else
+{
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/radadm/index.html");
+exit(0);
+

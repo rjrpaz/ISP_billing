@@ -1,0 +1,567 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+
+$url = "$server/radadm/menu.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Administraci&oacute;n de Usuarios", "#ffffff");
+
+if (defined($http_referer) && ($http_referer =~ m/$url/))
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $operacion = param('operacion');
+	my @planes = ();
+	my @grupos = ();
+	my $nivel = "";
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+	$nivel = &obtener_nivel($wwwuser);
+
+	if ($operacion eq "Alta")
+	{
+		if ($nivel eq "Tareas de Consulta")
+		{
+			&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+		}
+
+		$fecha_de_hoy = `/bin/date +%d/%m/%y`;
+		($fecha_de_hoy) = ($fecha_de_hoy =~ /([^\n]*)/);
+		
+		print <<body_alta;
+  <FORM ACTION="alta.html" METHOD="post\">
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <TABLE COOL BORDER="1" CELLPADDING="0" CELLSPACING="0" ALIGN="center">
+
+    <TR>
+     <TD ALIGN="left" COLSPAN="2">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+        Datos Personales
+        <BR>
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Apellido:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <INPUT TYPE="text" NAME="apellido" SIZE="60">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Nombre:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <INPUT TYPE="text" NAME="nombre" SIZE="60">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Sexo:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       <SELECT NAME="sexo">
+        <OPTION>Masculino
+        <OPTION>Femenino
+       </SELECT>
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Documento:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <INPUT TYPE="text" NAME="documento" SIZE="60">
+     </TD>
+    </TR>
+
+    <TR>
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Direcci&oacute;n:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <INPUT TYPE="text" NAME="direccion" SIZE="60">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Localidad:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <INPUT TYPE="text" NAME="localidad" SIZE="60">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        C&oacute;digo Postal:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <INPUT TYPE="text" NAME="codigopostal" SIZE="60">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Tel&eacute;fono:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <INPUT TYPE="text" NAME="telefono" SIZE="60">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        IVA:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Tipo de IVA:
+       &nbsp;
+       <SELECT NAME="tipoiva">
+        <OPTION>Inscripto
+        <OPTION>No Inscripto
+        <OPTION SELECTED>Consumidor Final
+        <OPTION>Excento
+        <OPTION>Monotributo
+       </SELECT>
+       Nro. CUIT:
+       &nbsp;
+       <INPUT TYPE="text" NAME="cuit" SIZE="30">
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Plan contratado:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       <SELECT NAME="plan">
+body_alta
+		@planes = &listar_planes();
+		foreach $planes (@planes)
+		{
+			print "        <OPTION>$planes\n";
+		}
+		print <<body_alta;
+       </SELECT>
+      </FONT>
+     </TD>
+    </TR>
+body_alta
+
+		if ($nivel eq "Acceso Total")
+		{
+			print <<body_alta;
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Grupo de Usuario:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       <SELECT NAME="grupo">
+body_alta
+			@grupos = &listar_grupos();
+			foreach $grupos (@grupos)
+			{
+				print "        <OPTION";
+				if ($grupos eq $grupo_default)
+				{
+					print " SELECTED";
+				}
+				print ">$grupos\n";
+			}
+			print <<body_alta;
+       </SELECT>
+      </FONT>
+     </TD>
+    </TR>
+body_alta
+		}
+
+		print <<body_alta;
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Estado:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="radio" NAME="estado" VALUE="Activo" CHECKED>Activo
+        &nbsp; &nbsp;
+        <INPUT TYPE="radio" NAME="estado" VALUE="Inactivo">Inactivo
+        &nbsp; &nbsp; &nbsp; &nbsp;
+        Fecha de Alta: 
+        &nbsp; &nbsp;
+        <INPUT TYPE="text" NAME="fechaalta" VALUE="$fecha_de_hoy" SIZE="10">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="Confirmar">
+        &nbsp; &nbsp; &nbsp;
+        <INPUT TYPE="reset" VALUE="Limpiar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body_alta
+	}
+	elsif ($operacion =~ /^Modificaci/)
+	{
+		print <<body_modificacion;
+  <FORM ACTION="modificacion.html" METHOD="post\">
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <TABLE COOL BORDER="1" CELLPADDING="0" CELLSPACING="0" ALIGN="center" WIDTH="500">
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+        Ingrese Apellido, Nombre o Nombre de Usuario
+        <BR>
+        para ubicar al registro:
+        <BR>
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2">
+      <INPUT TYPE="text" NAME="search" SIZE="60">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="Confirmar">
+        &nbsp; &nbsp; &nbsp;
+        <INPUT TYPE="reset" VALUE="Limpiar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body_modificacion
+	}
+	elsif ($operacion eq "CambioContrasena")
+	{
+		if ($nivel ne "Tareas de Consulta")
+		{
+			&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+		}
+	
+		print <<body;
+  <FORM ACTION="cambiocontrasena.html" METHOD="post\">
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <TABLE COOL BORDER="1" CELLPADDING="0" CELLSPACING="0" ALIGN="center" WIDTH="500">
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+        Ingrese Apellido, Nombre o Nombre de Usuario
+        <BR>
+        para ubicar al registro:
+        <BR>
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2">
+      <INPUT TYPE="text" NAME="search" SIZE="60">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="Confirmar">
+        &nbsp; &nbsp; &nbsp;
+        <INPUT TYPE="reset" VALUE="Limpiar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body
+	}
+	elsif ($operacion eq "Baja")
+	{
+		if ($nivel eq "Tareas de Consulta")
+		{
+			&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+		}
+	
+		print <<body_baja;
+  <FORM ACTION="baja.html" METHOD="post\">
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <TABLE COOL BORDER="1" CELLPADDING="0" CELLSPACING="0" ALIGN="center" WIDTH="500">
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+        Ingrese Apellido, Nombre o Nombre de Usuario
+        <BR>
+        para ubicar al registro:
+        <BR>
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2">
+      <INPUT TYPE="text" NAME="search" SIZE="60">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" WIDTH="50%">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="Confirmar">
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center" SIZE="50%">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="reset" VALUE="Limpiar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body_baja
+	}
+	elsif ($operacion eq "Chequeo")
+	{
+		&menu_chequeo($wwwuser, $wwwpass, "", "");
+	}
+	elsif ($operacion eq "Conectados")
+	{
+		if ($nivel ne "Acceso Total")
+		{
+			&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+		}
+
+		&menu_conectados($wwwuser, $wwwpass);
+	}
+	elsif ($operacion eq "Mail")
+	{
+		if ($nivel eq "Tareas de Consulta")
+		{
+			&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+		}
+
+		print <<body;
+  <FORM ACTION="maildir.html" METHOD="post\">
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <TABLE COOL BORDER="1" CELLPADDING="0" CELLSPACING="0" ALIGN="center" WIDTH="500">
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+        Ingrese Nombre de Cuenta de Correo Electr&oacute;nico
+        <BR>
+        para ubicar al registro:
+        <BR>
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2">
+      <INPUT TYPE="text" NAME="search" SIZE="60">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" WIDTH="50%">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="Confirmar">
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center" SIZE="50%">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="reset" VALUE="Limpiar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body
+	}
+	elsif ($operacion eq "Listado")
+	{
+		&menu_listado($wwwuser, $wwwpass, "Todos", "Todos", "Todos", "on", "on", "on", "on", "", "on", "on", "on", "on", "on", "on", "on", "on", "on", "on", "on", "on");
+	}
+	elsif ($operacion eq "Individuales")
+	{
+		print <<body_individuales;
+  <FORM ACTION="individuales.html" METHOD="post\">
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <TABLE COOL BORDER="1" CELLPADDING="0" CELLSPACING="0" ALIGN="center" WIDTH="500">
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+        Ingrese Apellido, Nombre o Nombre de Usuario
+        <BR>
+        para ubicar al registro:
+        <BR>
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2">
+      <INPUT TYPE="text" NAME="search" SIZE="60">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" WIDTH="50%">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="Confirmar">
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center" SIZE="50%">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="reset" VALUE="Limpiar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body_individuales
+	}
+	elsif ($operacion eq "Totales")
+	{
+		print "  <DIV ALIGN=\"center\">\n";
+		print "   <TABLE bgcolor=\"#ffffff\" BORDER=\"0\" CELLPADDING=\"0\" CELLSPACING=\"0\" ALIGN=\"center\">\n";
+		print "    <FORM ACTION=\"totales.html\" METHOD=\"post\">\n";
+		print "     <INPUT TYPE=\"hidden\" NAME=\"formato\" VALUE=\"html\">\n";
+		print "     <INPUT TYPE=\"hidden\" NAME=\"wwwuser\" VALUE=\"$wwwuser\">\n";
+		print "     <INPUT TYPE=\"hidden\" NAME=\"wwwpass\" VALUE=\"$wwwpass\">\n";
+		&menu_totales;
+	}
+}
+else
+{
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+
+}
+&tail_html("/radadm/index.html");
+
+exit;

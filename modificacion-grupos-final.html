@@ -1,0 +1,51 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+
+$url = "$server/radadm/modificacion-grupos-realizacion.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Definici&oacute;n de Grupos de Usuarios - Modificaci&oacute;n", "#ffffff");
+
+if ($http_referer =~ m/$url/)
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $nombre = param('nombre');
+	my $dominio = param('dominio');
+	my $descripcion = param('descripcion');
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	if ((&obtener_nivel($wwwuser)) ne "Acceso Total")
+	{
+		&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+	}
+
+	&alta_grupos($nombre, $dominio, $descripcion);
+
+	&insertar_log ($wwwuser, "Modificacion de Grupos de Usiarios", "Nombre: $nombre, Dominio: $dominio, Descripcion: $descripcion");
+
+print <<body;
+
+  <DIV ALIGN="center">
+   <B>
+    <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+     Hecho ...
+    </FONT>
+   </B>
+  </DIV>
+
+body
+}
+else
+{
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/radadm/index.html");
+exit(0);

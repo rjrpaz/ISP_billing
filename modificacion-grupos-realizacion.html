@@ -1,0 +1,120 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+
+$url = "$server/radadm/modificacion-grupos.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Definici&oacute;n de Grupos de Usuarios - Modificaci&oacute;n", "#ffffff");
+
+if ($http_referer =~ m/$url/)
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $modificar = param('modificar');
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	if ((&obtener_nivel($wwwuser)) ne "Acceso Total")
+	{
+		&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+	}
+
+	if ($modificar ne "")
+	{
+		$dbh = Mysql->connect($host, $database, $dbuser, $dbpass);
+		$errmsg = Mysql->errmsg();
+		if ($errmsg ne "")
+		{
+			&return_error_mysql ("Error en el proceso", "Existi&oacute; al intentarse la conexi&oacute;n a la Base de Datos.<BR>Consulte al Administrador de la misma", $errmsg);
+		}
+
+		$sql_statement = "SELECT Dominio, Descripcion FROM grupos WHERE Nombre LIKE '".$modificar."'";
+
+		$sth = $dbh->query($sql_statement)
+		or die &return_error_mysql ("Error en el proceso", "Hubo un error en la consulta a la Base de Datos.<BR>Consulte al Administrador de la misma", $dbh->errmsg());
+		
+		@arr = $sth->fetchrow;
+
+		print <<body_modificacion_1;
+  <FORM ACTION="modificacion-grupos-final.html" METHOD="post\">
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <INPUT TYPE="hidden" NAME="nombre" VALUE="$modificar">
+   <TABLE COOL BORDER="1" CELLPADDING="0" CELLSPACING="0" ALIGN="center">
+    <TR>
+     <TD ALIGN="center" COLSPAN="3">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+       Grupo
+       &nbsp;
+       <B>
+        $modificar : 
+       </B>
+       &nbsp;
+       Modifique los campos que asi lo requieran
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Dominio:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left" COLSPAN="2">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       <INPUT TYPE="text" NAME="dominio" VALUE="$arr[0]" SIZE="60">
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Descripcion:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left" COLSPAN="2">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       <INPUT TYPE="text" NAME="descripcion" VALUE="$arr[1]" SIZE="60">
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="3" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="Confirmar">
+        &nbsp; &nbsp; &nbsp;
+        <INPUT TYPE="reset" VALUE="Limpiar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body_modificacion_1
+	}
+	else
+	{
+		&return_error_mysql ("Error en el proceso", "No se ingreso un elemento para modificar", $dbh->errmsg());
+	}
+}
+else
+{
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/radadm/index.html");
+exit(0);

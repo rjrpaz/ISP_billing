@@ -1,0 +1,177 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+
+$url = "$server/radadm/abm-adm.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Administraci&oacute;n de Operadores - Alta", "#ffffff");
+
+if ($http_referer =~ m/$url/)
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $nombre = param('nombre');
+	my $usuario = param('usuario');
+	my $password = param('password');
+	my $nivel = param('nivel');
+	my $grupo = param('grupo');
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	if ((&obtener_nivel($wwwuser)) ne "Acceso Total")
+	{
+		&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+	}
+
+	if ($usuario eq "")
+	{
+		&return_error_mysql ("Error en el proceso", "No se ingres&oacute; nombre de usuario para el Operador", "")
+	}
+
+	############################################
+	# Chequea si el username ya esta utilizado #
+	############################################
+	if (&usuario_existente_usuarios($usuario))
+	{
+		&return_error_mysql ("Error en el proceso", "El nombre de usuario <b> $usuario </b> ya est&aacute; ocupado", "")
+	}
+
+	################################################
+	# Chequea si la password tiene un largo minimo #
+	################################################
+	if ($password !~ m/(.{$tamanio_minimo_contrasenia})/)
+	{
+		&return_error_mysql ("Error en el proceso", "Es conveniente que la contrase&ntilde;a tenga al menos $tamanio_minimo_contrasenia caracteres de largo", "")
+	}
+
+	###################################
+	# Acomoda mayusculas y minusculas #
+	###################################
+	$nombre = &acomodar_case($nombre);
+
+	print <<body_alta;
+
+  <FORM ACTION="alta-adm-final.html" METHOD="post\">
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <INPUT TYPE="hidden" NAME="nombre" VALUE="$nombre">
+   <INPUT TYPE="hidden" NAME="usuario" VALUE="$usuario">
+   <INPUT TYPE="hidden" NAME="password" VALUE="$password">
+   <INPUT TYPE="hidden" NAME="nivel" VALUE="$nivel">
+   <INPUT TYPE="hidden" NAME="grupo" VALUE="$grupo">
+   <TABLE COOL BORDER="1" CELLPADDING="0" CELLSPACING="0" ALIGN="center">
+
+    <TR>
+     <TD ALIGN="left" COLSPAN="2">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+        Datos Personales del Operador (Confirmaci&oacute;n)
+        <BR>
+        Confirmar los datos:
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Nombre:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $nombre
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Usuario:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $usuario
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Contrase&ntilde;a
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $password
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Nivel de Acceso:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $nivel
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Grupo de Usuarios:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $grupo
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="Confirmar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body_alta
+}
+else
+{
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/radadm/index.html");
+exit(0);
+

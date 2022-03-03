@@ -1,0 +1,344 @@
+#!/usr/bin/perl -w
+
+use CGI;
+use freeradius;
+use CGI qw/:standard/;
+use Spreadsheet::WriteExcel::Simple;
+
+my $query = new CGI;
+
+my $url = "$server/radadm/listado.html";
+my $url_1 = "$server/radadm/mailgrupo.html";
+my $http_referer = $ENV{'HTTP_REFERER'};
+my $ss = Spreadsheet::WriteExcel::Simple->new;
+
+if ($http_referer =~ m/$url/)
+{
+	my $query = new CGI;
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $plan = param('plan');
+	my $grupo = param('grupo');
+	my $agente = param('agente');
+	my $activo = param('activo');
+	my $inactivo = param('inactivo');
+	my $facturar_excedente = param('facturar_excedente');
+	my $corte_de_servicio = param('corte_de_servicio');
+	my $localidad = param('localidad');
+
+	print header();
+	&head_html("", "Radius - Administraci&oacute;n de Usuarios - Mail Administrativo al Grupo", "#ffffff");
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	print <<body;
+  <FORM ACTION="mailgrupo.html" METHOD="post" ENCTYPE="multipart/form-data">
+  <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+  <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+  <INPUT TYPE="hidden" NAME="plan" VALUE="$plan">
+  <INPUT TYPE="hidden" NAME="grupo" VALUE="$grupo">
+  <INPUT TYPE="hidden" NAME="agente" VALUE="$agente">
+  <INPUT TYPE="hidden" NAME="activo" VALUE="$activo">
+  <INPUT TYPE="hidden" NAME="inactivo" VALUE="$inactivo">
+  <INPUT TYPE="hidden" NAME="facturar_excedente" VALUE="$facturar_excedente">
+  <INPUT TYPE="hidden" NAME="corte_de_servicio" VALUE="$corte_de_servicio">
+  <INPUT TYPE="hidden" NAME="localidad" VALUE="$localidad">
+   <TABLE bgcolor="#ffffff" BORDER="0" CELLPADDING="0" CELLSPACING="0" ALIGN="center">
+    <TR HEIGHT="16">
+     <TD ALIGN="center" VALIGN="middle" NOWRAP COLSPAN="2">
+      <H5>
+       <font face="Arial, Helvetica, Geneva, Swiss, SunSans-Regular">
+        <B>
+         Confeccione el mail:
+        </B>
+       </FONT>
+      </H5>
+     </TD>
+    </TR>
+
+    <TR BGCOLOR="#daa520" HEIGHT="16">
+     <TD ALIGN="center" WIDTH=150 VALIGN="middle" NOWRAP>
+      <H5>
+       <font face="Arial, Helvetica, Geneva, Swiss, SunSans-Regular" color="white">
+        <B>
+         Asunto:
+        </B>
+       </FONT>
+      </H5>
+     </TD>
+     <TD ALIGN="left" VALIGN="middle" NOWRAP>
+      <H5>
+       <font face="Arial, Helvetica, Geneva, Swiss, SunSans-Regular" color="white">
+        <B>
+         <INPUT TYPE="text" SIZE="60" NAME="asunto">
+        </B>
+       </FONT>
+      </H5>
+     </TD>
+    </TR>
+
+    <TR BGCOLOR="#daa520" HEIGHT="16">
+     <TD ALIGN="center" WIDTH=150 VALIGN="middle" NOWRAP>
+      <H5>
+       <font face="Arial, Helvetica, Geneva, Swiss, SunSans-Regular" color="white">
+        <B>
+         Archivo Adjunto:
+        </B>
+       </FONT>
+      </H5>
+     </TD>
+     <TD ALIGN="left" VALIGN="middle" NOWRAP>
+      <H5>
+       <font face="Arial, Helvetica, Geneva, Swiss, SunSans-Regular" color="white">
+        <B>
+         <INPUT TYPE="file" NAME="adjunto">
+        </B>
+       </FONT>
+      </H5>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN=\"left\" COLSPAN=\"2\">
+      <font face="Arial, Helvetica, Geneva, Swiss, SunSans-Regular">
+       <TEXTAREA ROWS=20 COLS=75 NAME="cuerpo"></TEXTAREA>
+      </font>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2">
+      <font face="Arial, Helvetica, Geneva, Swiss, SunSans-Regular" size="2">
+       <INPUT TYPE="submit" VALUE="    Enviar    ">
+      </FONT>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+  <BR>
+body
+}
+elsif ($http_referer =~ m/$url_1/)
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $plan = param('plan');
+	my $localidad = param('localidad');
+	my $asunto = param('asunto');
+	my $cuerpo = param('cuerpo');
+	my $sql_statement = "";
+	my $grupo = "";
+	my $agente = "";
+	my $activo = param('activo');
+	my $inactivo = param('inactivo');
+	my $facturar_excedente = param('facturar_excedente');
+	my $corte_de_servicio = param('corte_de_servicio');
+	my $where = "";
+	my $arr = "";
+	my @e_mail = ();
+	my $e_mail = "";
+	my $comando = "";
+	my $filename = $query->param('adjunto');
+
+	my $buffer;
+	open (ATTACH,">/tmp/$$.attach");
+	while (read($filename,$buffer,1024))
+	{
+		print ATTACH $buffer;
+	}
+	close(ATTACH);
+
+	print header();
+	&head_html("", "Radius - Administraci&oacute;n de Usuarios - Mail Administrativo al Grupo", "#ffffff");
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	if ($asunto eq "")
+	{
+		&return_error_mysql ("Error en el proceso", "Ingrese un asunto para el mail", "")
+	}
+
+	if ($cuerpo eq "")
+	{
+		&return_error_mysql ("Error en el proceso", "Ingrese un texto para el mail", "")
+	}
+
+	open (BODY, "> /tmp/$$.mail");
+	print BODY "Subject: ",$asunto, "\n\n";
+	print BODY $cuerpo, "\n\n";
+	open (UUENCODE, "cat /tmp/$$.attach | uuencode $filename |");
+	while (<UUENCODE>)
+	{
+		print BODY $_;
+	}
+	close (UUENCODE);
+	close (BODY);
+
+	my $nivel = &obtener_nivel($wwwuser);
+
+	my $dbh = Mysql->connect($host, $database, $dbuser, $dbpass);
+
+	if ($plan ne "Todos")
+	{
+		$where = " WHERE (planes.Nombre like '".$plan."')";
+	}
+
+	if ($nivel eq "Acceso Total")
+	{
+		$grupo = param('grupo');
+	}
+	else
+	{
+		$sql_statement = "SELECT grupos.Nombre FROM grupos LEFT JOIN usuarios ON (usuarios.Grupo_ID=grupos.ID) WHERE (usuarios.Username like '".$wwwuser."')";
+		my $sth = $dbh->query($sql_statement)
+		or die &return_error_mysql ("Error en el proceso", "Hubo un error al Intentar obtener la palabra clave de la Base de Datos.<BR>Consulte al Administrador de la misma.", "");
+		$grupo = $sth ->fetchrow;
+	}
+
+	if ($grupo ne "Todos")
+	{
+		if ($where eq "")
+		{
+			$where = " WHERE";
+		}
+		else
+		{
+			$where = $where." AND";
+		}
+		$where = $where." (grupos.Nombre like '".$grupo."')";
+	}
+
+	if ((&usuario_tiene_agente_asociado($wwwuser)) == 0)
+	{
+		$agente = param('agente');
+	}
+	else
+	{
+		$sql_statement = "SELECT agentes.Nombre FROM agentes LEFT JOIN usuarios ON (agentes.Usuario_ID=usuarios.ID) WHERE (usuarios.Username like '".$wwwuser."')";
+		my $sth = $dbh->query($sql_statement)
+		or die &return_error_mysql ("Error en el proceso", "Hubo un error al Intentar obtener la palabra clave de la Base de Datos.<BR>Consulte al Administrador de la misma.", "");
+		$agente = $sth ->fetchrow;
+	}
+
+	if ($agente ne "Todos")
+	{
+		if ($where eq "")
+		{
+			$where = " WHERE";
+		}
+		else
+		{
+			$where = $where." AND";
+		}
+		$where = $where." (agentes.Nombre like '".$agente."')";
+	}
+
+	if (($activo ne "on") || ($inactivo ne "on"))
+	{
+		if (($activo ne "on") && ($inactivo ne "on"))
+		{
+			&return_error_mysql ("Error en el proceso", "Debe elegir al menos los usuarios activos o inactivos", "");
+		}
+		if ($where eq "")
+		{
+			$where = " WHERE";
+		}
+		else
+		{
+			$where = $where." AND";
+		}
+		if ($activo eq "on")
+		{
+			$where = $where." (personaldata.Estado like 'Activo')";
+		}
+		if ($inactivo eq "on")
+		{
+			$where = $where." (personaldata.Estado like 'Inactivo')";
+		}
+	}
+
+	if (($facturar_excedente ne "on") || ($corte_de_servicio ne "on"))
+	{
+		if (($facturar_excedente ne "on") && ($corte_de_servicio ne "on"))
+		{
+			&return_error_mysql ("Error en el proceso", "Debe elegir al menos los usuarios a los cuales se les Factura Excedente o se les Corta el Servicio", "");
+		}
+		if ($where eq "")
+		{
+			$where = " WHERE";
+		}
+		else
+		{
+			$where = $where." AND";
+		}
+		if ($facturar_excedente eq "on")
+		{
+			$where = $where." (personaldata.Exceso_Horas like 'Facturar Excedente')";
+		}
+		if ($corte_de_servicio eq "on")
+		{
+			$where = $where." (personaldata.Exceso_Horas like 'Corte de Servicio')";
+		}
+	}
+
+	if ($localidad ne "")
+	{
+		$localidad =~ tr/[a-z]/[A-Z]/;
+		if ($where eq "")
+		{
+			$where = " WHERE";
+		}
+		else
+		{
+			$where = $where." AND";
+		}
+		$where = $where." ((UPPER(personaldata.Localidad)) like '%".$localidad."%')";
+	}
+
+	$sql_statement = "SELECT personaldata.E_mails FROM personaldata LEFT JOIN planes ON (personaldata.Plan_ID=planes.ID) LEFT JOIN grupos ON (personaldata.Grupo_ID = grupos.ID) LEFT JOIN agentes ON (personaldata.Agente_ID = agentes.ID)";
+	if ($where ne "")
+	{
+		$sql_statement = $sql_statement.$where;
+	}
+
+	my $sth = $dbh->query($sql_statement)
+	or die &return_error_mysql ("Error en el proceso", "Hubo un error al Intentar obtener la palabra clave de la Base de Datos.<BR>Consulte al Administrador de la misma.", "");
+
+	while ($arr = $sth->fetchrow)
+	{
+		@e_mail = split /,/, $arr;
+
+		foreach $e_mail (@e_mail)
+		{
+			$comando = "export QMAILUSER=administrador;export QMAILNAME=\"Administracion de TVICom\";cat /tmp/$$.mail | /var/qmail/bin/qmail-inject $e_mail";
+			system($comando);
+		}
+	}
+	$comando = "rm -f /tmp/$$.mail";
+	system($comando);
+	$comando = "rm -f /tmp/$$.attach";
+	system($comando);
+
+print <<body;
+
+  <DIV ALIGN="center">
+   <B>
+    <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+     Hecho ...
+    </FONT>
+   </B>
+  </DIV>
+
+body
+}
+else
+{
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/radadm/index.html");
+exit(0);

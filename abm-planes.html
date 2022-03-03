@@ -1,0 +1,432 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+
+$url = "$server/radadm/menu.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Definici&oacute;n de Planes", "#ffffff");
+
+if (defined($http_referer) && ($http_referer =~ m/$url/))
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $operacion = param('operacion');
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	if ((&obtener_nivel($wwwuser)) ne "Acceso Total")
+	{
+		&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+	}
+
+	if ($operacion eq "Alta")
+	{
+		print <<body_alta;
+  <FORM ACTION="alta-plan.html" METHOD="post\">
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <TABLE COOL BORDER="1" CELLPADDING="0" CELLSPACING="0" ALIGN="center">
+
+    <TR>
+     <TD ALIGN="left" COLSPAN="4">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+        Creaci&oacute;n de un Plan
+        <BR>
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Nombre:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left" COLSPAN="3">
+      <INPUT TYPE="text" NAME="nombre" SIZE="40">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left" HEIGHT="10%">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Montos:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center" HEIGHT="30%">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       1er. Vencimiento:
+       <BR>
+       (necesario)
+      </FONT>
+      <BR>
+      <INPUT TYPE="text" NAME="primer_vencimiento" SIZE="10">
+     </TD>
+     <TD ALIGN="center" HEIGHT="30%">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       2do. Vencimiento:
+       <BR>
+       (opcional)
+      </FONT>
+      <BR>
+      <INPUT TYPE="text" NAME="segundo_vencimiento" SIZE="10">
+     </TD>
+     <TD ALIGN="center" HEIGHT="30%">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       3er. Vencimiento:
+       <BR>
+       (opcional)
+      </FONT>
+      <BR>
+      <INPUT TYPE="text" NAME="tercer_vencimiento" SIZE="10">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left" ROWSPAN="2">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Caracter&iacute;sticas
+        <BR>
+        Generales:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Cantidad de
+       <BR>
+       Accesos Simult&aacute;neos:
+       <BR>
+       (valor por defecto: 1.
+       <BR>
+       0: No incluye acceso Dial-Up)
+      </FONT>
+      <BR>
+      <INPUT TYPE="text" NAME="cantidad_accesos_simultaneos" SIZE="10">
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Cantidad de Horas:
+       <BR>
+       (valor por defecto: sin l&iacute;mite)
+      </FONT>
+      <BR>
+      <INPUT TYPE="text" NAME="cantidad_horas" SIZE="10">
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Cantidad de direcciones
+       <BR>
+       de correo electr&oacute;nico:
+       <BR>
+       (valor por defecto: 1)
+      </FONT>
+      <BR>
+      <INPUT TYPE="text" NAME="cantidad_e_mail" SIZE="10">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Costo del tiempo excedente:
+       <BR>
+       (necesario)
+      </FONT>
+      <BR>
+      <INPUT TYPE="text" NAME="costo_tiempo_excedente" SIZE="10">
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Incluye Navegaci&oacute;n:
+      </FONT>
+      <BR>
+      <INPUT TYPE="checkbox" NAME="incluye_navegacion" CHECKED>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Incluye Hosting:
+      </FONT>
+      <BR>
+      <INPUT TYPE="checkbox" NAME="incluye_hosting">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="4" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="Confirmar">
+        &nbsp; &nbsp; &nbsp;
+        <INPUT TYPE="reset" VALUE="Limpiar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body_alta
+	}
+	elsif ($operacion =~ /^Modificaci/)
+	{
+		print <<body_modificacion;
+  <FORM ACTION="modificacion-plan.html" METHOD="post\">
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <TABLE COOL BORDER="1" CELLPADDING="0" CELLSPACING="0" ALIGN="center" WIDTH="500">
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+        Ingrese Nombre, Costo, etc.,
+        <BR>
+        para ubicar al registro:
+        <BR>
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2">
+      <INPUT TYPE="text" NAME="search" SIZE="60">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" WIDTH="50%">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="Confirmar">
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center" SIZE="50%">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="reset" VALUE="Limpiar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body_modificacion
+	}
+	elsif ($operacion eq "Baja")
+	{
+		print <<body_baja;
+  <FORM ACTION="baja-plan.html" METHOD="post\">
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <TABLE COOL BORDER="1" CELLPADDING="0" CELLSPACING="0" ALIGN="center" WIDTH="500">
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+        Ingrese Nombre, Costo, etc.,
+        <BR>
+        para ubicar al registro:
+        <BR>
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2">
+      <INPUT TYPE="text" NAME="search" SIZE="60">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" WIDTH="50%">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="Confirmar">
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center" SIZE="50%">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="reset" VALUE="Limpiar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body_baja
+	}
+	elsif ($operacion eq "Listado")
+	{
+		$dbh = Mysql->connect($host, $database, $dbuser, $dbpass);
+
+		$sql_statement = "SELECT * FROM planes ORDER BY Nombre";
+		$sth = $dbh->query($sql_statement)
+		or die &return_error_mysql ("Error en el proceso", "Hubo un error en la consulta a la Base de Datos.<BR>Consulte al Administrador de la misma.", $dbh->errmsg());
+
+		print <<body_listado;
+  <TABLE COOL BORDER="1" CELLPADDING="0" CELLSPACING="0" ALIGN="center" WIDTH="500">
+
+   <TR>
+    <TD ALIGN="center" COLSPAN="4">
+     <B>
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+       Planes Existentes:
+      </FONT>
+     </B>
+    </TD>
+   </TR>
+
+body_listado
+
+		while (@arr = $sth->fetchrow)
+		{
+			print <<body_listado;
+   <TR BGCOLOR="#ffebcd">
+    <TD ALIGN="center" COLSPAN="4">
+     &nbsp; &nbsp; &nbsp;
+    </TD>
+   </TR>
+
+   <TR>
+    <TD ALIGN="left">
+     <B>
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Nombre:
+      </FONT>
+     </B>
+    </TD>
+    <TD ALIGN="center" COLSPAN="3">
+     <B>
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $arr[1]
+      </FONT>
+     </B>
+    </TD>
+   </TR>
+
+   <TR>
+    <TD ALIGN="left" HEIGHT="10%">
+     <B>
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Montos:
+      </FONT>
+     </B>
+    </TD>
+    <TD ALIGN="center" HEIGHT="30%">
+     <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+      1er. Vencimiento:
+      <BR>
+      $arr[2]
+     </FONT>
+    </TD>
+    <TD ALIGN="center" HEIGHT="30%">
+     <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+      2do. Vencimiento:
+      <BR>
+      $arr[3]
+     </FONT>
+    </TD>
+    <TD ALIGN="center" HEIGHT="30%">
+     <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+      3er. Vencimiento:
+      <BR>
+      $arr[4]
+     </FONT>
+    </TD>
+   </TR>
+
+   <TR>
+    <TD ALIGN="left" ROWSPAN="2">
+     <B>
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Caracter&iacute;sticas
+       <BR>
+       Generales:
+      </FONT>
+     </B>
+    </TD>
+    <TD ALIGN="center">
+     <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+      Cantidad de
+      <BR>
+      Accesos Simult&aacute;neos:
+      $arr[5]
+     </FONT>
+    </TD>
+    <TD ALIGN="center">
+     <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+      Cantidad de Horas:
+      <BR>
+      $arr[6]
+     </FONT>
+    </TD>
+    <TD ALIGN="center">
+     <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+      Cantidad de direcciones
+      <BR>
+      de correo electr&oacute;nico:
+      $arr[7]
+     </FONT>
+    </TD>
+   </TR>
+
+   <TR>
+    <TD ALIGN="center">
+     <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+      Costo del tiempo excedente:
+      <BR>
+      $arr[8]
+     </FONT>
+    </TD>
+    <TD ALIGN="center">
+     <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+      Incluye Navegaci&oacute;n:
+      <BR>
+      $arr[9]
+     </FONT>
+    </TD>
+    <TD ALIGN="center">
+     <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+      Incluye Hosting:
+      <BR>
+      $arr[10]
+     </FONT>
+    </TD>
+   </TR>
+
+body_listado
+		}
+
+		print "</TABLE>\n";
+	}
+}
+else
+{
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+
+}
+&tail_html("/radadm/index.html");
+
+exit;

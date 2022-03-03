@@ -1,0 +1,16 @@
+- Pasar un tgz con los nuevos archivos
+
+- Hacer backup de las tablas del radius
+
+- Cambiar el parametro server en freeradius.pm
+
+- Ejecutar make
+
+- Ejecutar make install
+
+- Probar checkpassword
+
+- Probar abm
+
+# Para el dia de Hoy
+

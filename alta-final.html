@@ -1,0 +1,189 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+
+$url = "$server/radadm/alta-confirmacion.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Administraci&oacute;n de Usuarios - Alta", "#ffffff");
+
+if ($http_referer =~ m/$url/)
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $apellido = param('apellido');
+	my $nombre = param('nombre');
+	my $sexo = param('sexo');
+	my $documento = param('documento');
+	my $usuario = param('usuario');
+	my $password = param('password');
+	my $direccion = param('direccion');
+	my $localidad = param('localidad');
+	my $codigopostal = param('codigopostal');
+	my $telefono = param('telefono');
+	my $tipoiva = param('tipoiva');
+	my $cuit = param('cuit');
+	my $plan = param('plan');
+	my $estado = param('estado');
+	my $mora = param('mora');
+	my $fechaalta = param('fechaalta');
+	my $agente = param('agente');
+	my $cuenta_hosting = param('cuenta_hosting');
+	my $cantidad_e_mail = 0;
+	my $contador = 1;
+	my @e_mail_cuenta = ();
+	my @e_mail_password = ();
+	my $variable = "";
+	my $comando = "";
+	my $table = "";
+	my $acceso_simultaneo = 0;
+	my $e_mails = "";
+	my $nivel = "";
+	my $grupo = "";
+	my $grupo_id = 0;
+	my $agente_id = 0;
+	my $nro_cliente = 0;
+	my $hosting = "No";
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	$nivel = &obtener_nivel($wwwuser);
+	if ($nivel eq "Tareas de Consulta")
+	{
+		&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+	}
+
+	#################################################################
+	# Obtiene los datos de e_mail, y chequea si ya estan utilizados #
+	#################################################################
+
+	@elementos_plan = split /,/, $plan;
+	foreach $elementos_plan (@elementos_plan)
+	{
+		if ($elementos_plan =~ /E-mail/)
+		{
+			($cantidad_e_mail) = ($elementos_plan =~ /\s([^E]*)/);
+		}
+		if ($elementos_plan =~ /Acceso/)
+		{
+			($acceso_simultaneo) = ($elementos_plan =~ /:\s([^A]*)/);
+		}
+		if ($elementos_plan =~ /Hosting/)
+		{
+			$hosting = "Si";
+		}
+	}
+
+	while ($contador <= $cantidad_e_mail)
+	{
+		$variable = "e_mail_cuenta_".$contador;
+		$e_mail_cuenta[$contador] = param($variable);
+		############################################
+		# Chequea si el username ya esta utilizado #
+		############################################
+		if (&usuario_existente_so($e_mail_cuenta[$contador]))
+		{
+			&return_error_mysql ("Error en el proceso", "El nombre de usuario <b> $e_mail_cuenta[$contador] </b> ya est&aacute; ocupado", "")
+		}
+
+		$variable = "e_mail_password_".$contador;
+		$e_mail_password[$contador] = param($variable);
+		################################################
+		# Chequea si la password tiene un largo minimo #
+		################################################
+		if ($e_mail_password[$contador] !~ m/(.{$tamanio_minimo_contrasenia})/)
+		{
+			&return_error_mysql ("Error en el proceso", "Es conveniente que la contrase&ntilde;a tenga al menos $tamanio_minimo_contrasenia caracteres de largo: $e_mail_password[$contador]", "")
+		}
+
+		$contador++;
+	}
+
+	if ($acceso_simultaneo != 0)
+	{
+		if (($usuario ne "") && (&usuario_existente_radius($usuario)))
+		{
+			&return_error_mysql ("Error en el proceso", "El nombre de usuario ya est&aacute; ocupado", "")
+		}
+	}
+
+	$plan_id = &plan_existente ($plan);
+
+	if ($nivel eq "Acceso Total")
+	{
+		$grupo = param('grupo');
+		$grupo_id = &grupo_existente($grupo);
+	}
+	else
+	{
+		$grupo_id = &obtener_grupo_usuario($wwwuser);
+	}
+
+	$agente_id = &nombre_existente_agentes($agente);
+
+	foreach $e_mail_cuenta (@e_mail_cuenta)
+	{
+		if ($e_mails ne "")
+		{
+			$e_mails = $e_mails.",";
+		}
+		$e_mails = $e_mails.$e_mail_cuenta;
+	}
+	$nro_cliente = &alta_personaldata($usuario, $apellido, $nombre, $sexo, $documento, $direccion, $localidad, $codigopostal, $telefono, $tipoiva, $cuit, $estado, $mora, "", $fechaalta, $e_mails, $plan_id, $grupo_id, $agente_id);
+
+	if ($acceso_simultaneo != 0)
+	{
+		&alta_radcheck($usuario, $password);
+		if ($plan !~ /Navegaci/)
+		{
+			&alta_radreply($usuario);
+		}
+	}
+	
+	$contador = 1;
+	while ($contador <= $cantidad_e_mail)
+	{
+		&alta_so($e_mail_cuenta[$contador], $e_mail_password[$contador]);
+		if (($hosting eq "Si") && ($cuenta_hosting == $contador))
+		{
+			&alta_hosting($e_mail_cuenta[$contador]);
+		}
+		$contador++;
+	}
+
+	#################################################
+	# Genera entradas segun simultaneidad de acceso #
+	# ------------- FALTA IMPLEMENTAR ------------- #
+	#################################################
+	&insertar_log ($wwwuser, "Alta de Usuario", "Apellido: $apellido, Nombre: $nombre, Direccion: $direccion, Telefono: $telefono, Plan: $plan, Estado: $estado, Mora: $mora, Usuario: $usuario, Password: $password, E-Mails: $e_mails");
+
+
+print <<body;
+
+  <DIV ALIGN="center">
+   <B>
+    <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="red" SIZE="4">
+     Nro. de Cliente: $nro_cliente
+    </FONT>
+     <BR>
+     <BR>
+    <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+     Hecho ...
+    </FONT>
+   </B>
+  </DIV>
+
+body
+}
+else
+{
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/radadm/index.html");
+
+exit(0);

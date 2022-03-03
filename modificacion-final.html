@@ -1,0 +1,322 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+
+$url = "$server/radadm/modificacion-realizacion2.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Administraci&oacute;n de Usuarios - Modificaci&oacute;n", "#ffffff");
+
+if ($http_referer =~ m/$url/)
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $apellido = param('apellido');
+	my $nombre = param('nombre');
+	my $sexo = param('sexo');
+	my $documento = param('documento');
+	my $usuario = param('usuario');
+	my $password = param('password');
+	my $direccion = param('direccion');
+	my $localidad = param('localidad');
+	my $codigopostal = param('codigopostal');
+	my $telefono = param('telefono');
+	my $tipoiva = param('tipoiva');
+	my $cuit = param('cuit');
+	my $plan = param('plan');
+	my $grupo = param('grupo');
+	my $estado = param('estado');
+	my $mora = param('mora');
+	my $ultimo_mes_pago = param('ultimo_mes_pago');
+	my $fechaalta = param('fechaalta');
+	my $agente = param('agente');
+	my $personaldata_id = param('personaldata_id');
+	my $usuario_original = param('usuario_original');
+	my $cuenta_hosting = param('cuenta_hosting');
+	my $cantidad_e_mail = 0;
+	my $contador = 0;
+	my @e_mail_cuenta = ();
+	my @e_mail_password = ();
+	my $variable = "";
+	my $comando = "";
+	my $table = "";
+	my $acceso_simultaneo = 0;
+	my $e_mails = "";
+	my @e_mails_que_se_borran = ();
+	my $e_mails_nuevos = "";
+	my @e_mails_que_quedan_usuario = ();
+	my @e_mails_que_quedan_password = ();
+	my @cuentas_hosting_que_se_borran = ();
+	my $hosting_que_se_borran = 0;
+	my $e_mails_que_quedan = "";
+	my $nivel = "";
+	my $grupo_id = 0;
+	my $agente_id = 0;
+	my $nro_cliente = 0;
+	my $hosting = "No";
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	$nivel = &obtener_nivel($wwwuser);
+	if ($nivel eq "Tareas de Consulta")
+	{
+		&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+	}
+
+	@elementos_plan = split /,/, $plan;
+	foreach $elementos_plan (@elementos_plan)
+	{
+		if ($elementos_plan =~ /E-mail/)
+		{
+			($cantidad_e_mail) = ($elementos_plan =~ /\s([^E]*)/);
+		}
+		if ($elementos_plan =~ /Acceso/)
+		{
+			($acceso_simultaneo) = ($elementos_plan =~ /:\s([^A]*)/);
+		}
+		if ($elementos_plan =~ /Hosting/)
+		{
+			$hosting = "Si";
+		}
+	}
+
+	$dbh = Mysql->connect($host, $database, $dbuser, $dbpass);
+	$errmsg = Mysql->errmsg();
+	if ($errmsg ne "")
+	{
+		&return_error_mysql ("Error en el proceso", "Existi&oacute; al intentarse la conexi&oacute;n a la Base
+		de Datos.<BR>Consulte al Administrador de la misma", $errmsg);
+	}
+
+	$sql_statement = "SELECT E_mails FROM personaldata WHERE PersonalDataID = ".$personaldata_id;
+	$sth = $dbh->query($sql_statement)
+	or die &return_error_mysql ("Error en el proceso", "Hubo un error en la consulta a la Base de Datos.<BR>Consul
+	te al Administrador de la misma", $dbh->errmsg());
+
+	@e_mails_existentes = split /\,/, $sth->fetchrow;
+
+	$e_mails_que_quedan = 0;
+	foreach $e_mails_existentes (@e_mails_existentes)
+	{
+		$variable = param($e_mails_existentes);
+		if ($variable eq "on")
+		{
+			$e_mails_que_se_borran[$contador] = $e_mails_existentes;
+			if (($hosting eq "Si") && ($cuenta_hosting eq $e_mails_existentes))
+			{
+				&return_error_mysql ("Error en el proceso", "No se puede eliminar una cuenta de Hosting.<BR>Si aun desea eliminar esta cuenta, elija otra para el Hosting", $errmsg);
+			}
+			$contador++;
+		}
+		else
+		{
+			$e_mails_que_quedan_usuario[$e_mails_que_quedan] = $e_mails_existentes;
+			if (($hosting eq "Si") && ($cuenta_hosting ne $e_mails_existentes))
+			{
+				$cuentas_hosting_que_se_borran[$e_mails_que_quedan] = $e_mails_existentes;
+				$hosting_que_se_borran++;
+			}
+
+			$variable = $e_mails_existentes."_password";
+			$e_mails_que_quedan_password[$e_mails_que_quedan] = param($variable);
+
+			if (($e_mails_que_quedan_password[$e_mails_que_quedan] ne "") && ($e_mails_que_quedan_password[$e_mails_que_quedan] !~ m/(.{$tamanio_minimo_contrasenia})/))
+			{	
+				&return_error_mysql ("Error en el proceso", "Es conveniente que la contrase&ntilde;a tenga al menos $tamanio_minimo_contrasenia caracteres de largo: $e_mail_password[$contador]", "")
+			}
+
+			$e_mails_que_quedan++;
+		}
+	}
+	# Cantidad de e-mails nuevos que se deberian haber ingresado
+	$e_mails_nuevos = $cantidad_e_mail - $e_mails_que_quedan;
+
+	if ($e_mails_que_quedan > $cantidad_e_mail)
+	{
+		&return_error_mysql ("Error en el proceso", "Deben eliminarse m&aacute;s cuentas", "")
+	}
+
+	$contador = 1;
+	while ($contador <= $e_mails_nuevos)
+	{
+		$variable = "e_mail_cuenta_".$contador;
+		$e_mail_cuenta[$contador-1] = param($variable);
+		############################################
+		# Chequea si el username ya esta utilizado #
+		############################################
+		if ($e_mail_cuenta[$contador-1] eq "")
+		{
+			&return_error_mysql ("Error en el proceso", "No se ingres&oacute; un nuevo nombre de usuario, para alcanzar la cantidad definida en este plan", "")
+		}
+		if (($hosting eq "Si") && ($cuenta_hosting eq $variable))
+		{
+			$cuenta_hosting = $e_mail_cuenta[$contador-1];
+		}
+		if (($hosting eq "Si") && ($cuenta_hosting eq ""))
+		{
+			&return_error_mysql ("Error en el proceso", "Debe indicar una cuenta que sirva para hosting", "")
+		}
+
+		if (&usuario_existente_so($e_mail_cuenta[$contador-1]))
+		{
+			&return_error_mysql ("Error en el proceso", "El nombre de usuario <b> $e_mail_cuenta[$contador] </b> ya est&aacute; ocupado", "")
+		}
+
+		$variable = "e_mail_password_".$contador;
+		$e_mail_password[$contador-1] = param($variable);
+		################################################
+		# Chequea si la password tiene un largo minimo #
+		################################################
+		if ($e_mail_password[$contador-1] !~ m/(.{$tamanio_minimo_contrasenia})/)
+		{
+			&return_error_mysql ("Error en el proceso", "Es conveniente que la contrase&ntilde;a tenga al menos $tamanio_minimo_contrasenia caracteres de largo: $e_mail_password[$contador]", "")
+		}
+		$contador++;
+	}
+
+	if (($acceso_simultaneo != 0) && ($usuario ne $usuario_original))
+	{
+		if (($usuario ne "") && (&usuario_existente_radius($usuario)))
+		{
+			&return_error_mysql ("Error en el proceso", "El nombre de usuario <b> $usuario </b> ya est&aacute; ocupado", "")
+		}
+	}
+
+	$plan_id = &plan_existente ($plan);
+
+	if ($nivel eq "Acceso Total")
+	{
+		$grupo = param('grupo');
+		$grupo_id = &grupo_existente($grupo);
+	}
+	else
+	{
+		$grupo_id = &obtener_grupo_usuario($wwwuser);
+	}
+
+	$agente_id = &nombre_existente_agentes($agente);
+
+	foreach $e_mails_existentes (@e_mails_existentes)
+	{
+		$incluir = "Si";
+		foreach $e_mails_que_se_borran (@e_mails_que_se_borran)
+		{
+			if ($e_mails_existentes eq $e_mails_que_se_borran)
+			{
+				$incluir = "No";
+			}
+		}
+		if ($incluir eq "Si")
+		{
+			if ($e_mails ne "")
+			{
+				$e_mails = $e_mails.",";
+			}
+			$e_mails = $e_mails.$e_mails_existentes;
+		}
+	}
+
+	foreach $e_mail_cuenta (@e_mail_cuenta)
+	{
+		if ($e_mails ne "")
+		{
+			$e_mails = $e_mails.",";
+		}
+		$e_mails = $e_mails.$e_mail_cuenta;
+	}
+
+	$nro_cliente = &alta_personaldata($usuario, $apellido, $nombre, $sexo, $documento, $direccion, $localidad, $codigopostal, $telefono, $tipoiva, $cuit, $estado, $mora, $ultimo_mes_pago, $fechaalta, $e_mails, $plan_id, $grupo_id, $agente_id);
+
+	if ($usuario ne $usuario_original)
+	{
+		&baja_personaldata($usuario_original);
+		&baja_radcheck($usuario_original);
+		&baja_radreply($usuario_original);
+		&baja_hosting($usuario_original);
+	}
+
+	if ($acceso_simultaneo != 0)
+	{
+		&alta_radcheck($usuario, $password);
+		if ($plan !~ /Navegaci/)
+		{
+			&alta_radreply($usuario);
+		}
+		else
+		{
+			&baja_radreply($usuario);
+		}
+	}
+	else
+	{
+		&baja_radcheck($usuario_original);
+		&baja_radreply($usuario_original);
+	}
+
+	# Crea las cuentas nuevas
+	$contador = 0;
+	while ($contador < $e_mails_nuevos)
+	{
+		&alta_so($e_mail_cuenta[$contador], $e_mail_password[$contador]);
+		$contador++;
+	}
+
+	# Elimina las cuentas borradas
+	foreach $e_mails_que_se_borran (@e_mails_que_se_borran)
+	{
+		&baja_so($e_mails_que_se_borran);
+		&baja_hosting($e_mails_que_se_borran);
+	}
+
+	# Preventivamente elimina las cuentas de no son de hosting
+	foreach $cuentas_hosting_que_se_borran (@cuentas_hosting_que_se_borran)
+	{
+		&baja_hosting($cuentas_hosting_que_se_borran);
+	}
+
+	$contador = 0;
+	while ($contador < $e_mails_que_quedan)
+	{
+		&alta_so($e_mails_que_quedan_usuario[$contador], $e_mails_que_quedan_password[$contador]);
+		$contador++;
+	}
+
+	if ($hosting eq "Si")
+	{
+		&alta_hosting($cuenta_hosting);
+	}
+
+	#################################################
+	# Genera entradas segun simultaneidad de acceso #
+	# ------------- FALTA IMPLEMENTAR ------------- #
+	#################################################
+	&insertar_log ($wwwuser, "Modificacion de Usuario", "Apellido: $apellido, Nombre: $nombre, Direccion: $direccion, Telefono: $telefono, Plan: $plan, Estado: $estado, Usuario: $usuario, Password: $password, E-Mails: $e_mails");
+
+print <<body;
+
+  <DIV ALIGN="center">
+   <B>
+    <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="red" SIZE="4">
+     Nro. de Cliente: $nro_cliente
+    </FONT>
+    <BR>
+    <BR>
+    <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+     Hecho ...
+    </FONT>
+   </B>
+  </DIV>
+
+body
+}
+else
+{
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/radadm/index.html");
+exit(0);

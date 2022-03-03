@@ -1,0 +1,400 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+
+$url = "$server/radadm/modificacion.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Administraci&oacute;n de Usuarios - Modificaci&oacute;n", "#ffffff");
+
+if ($http_referer =~ m/$url/)
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $modificar = param('modificar');
+	my @planes = ();
+	my $nombre_plan = "";
+	my $nivel = "";
+	my @grupos = ();
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	$nivel = &obtener_nivel($wwwuser);
+	if ($nivel eq "Tareas de Consulta")
+	{
+		&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+	}
+
+	if ($modificar ne "")
+	{
+		$dbh = Mysql->connect($host, $database, $dbuser, $dbpass);
+		$errmsg = Mysql->errmsg();
+		if ($errmsg ne "")
+		{
+			&return_error_mysql ("Error en el proceso", "Existi&oacute; al intentarse la conexi&oacute;n a la Base de Datos.<BR>Consulte al Administrador de la misma", $errmsg);
+		}
+
+		$sql_statement = "SELECT personaldata.Nombre, personaldata.Sexo, personaldata.Documento, personaldata.Direccion, personaldata.Localidad, personaldata.CodigoPostal, personaldata.Telefono, personaldata.Tipo_IVA, personaldata.Cuit, personaldata.Estado, personaldata.Exceso_Horas, personaldata.Ultimo_Mes_Pago, personaldata.Fecha_Alta, planes.Nombre, grupos.Nombre, personaldata.PersonalDataID FROM personaldata LEFT JOIN planes ON (personaldata.Plan_ID=planes.ID) LEFT JOIN grupos ON (personaldata.Grupo_ID = grupos.ID) WHERE personaldata.PersonalDataID = ".$modificar;
+
+		$sth = $dbh->query($sql_statement)
+		or die &return_error_mysql ("Error en el proceso", "Hubo un error en la consulta a la Base de Datos.<BR>Consulte al Administrador de la misma", $dbh->errmsg());
+		
+		@arr = $sth->fetchrow;
+		($apellido, $nombre) = split /, /, $arr[0];
+
+		print <<body_modificacion;
+  <FORM ACTION="modificacion-realizacion2.html" METHOD="post\">
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <INPUT TYPE="hidden" NAME="personaldata_id" VALUE="$modificar">
+   <TABLE COOL BORDER="1" CELLPADDING="0" CELLSPACING="0" ALIGN="center">
+    <TR>
+     <TD ALIGN="center" COLSPAN="2">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="red" SIZE="4">
+       Nro. de Cliente: $arr[15]
+      </FONT>
+       <BR>
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+       Usuario
+       &nbsp;
+       <B>
+        $arr[0] : 
+       </B>
+       &nbsp;
+       Modifique los campos que asi lo requieran
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Apellido:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       <INPUT TYPE="text" NAME="apellido" VALUE="$apellido" SIZE="60">
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Nombre:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       <INPUT TYPE="text" NAME="nombre" VALUE="$nombre" SIZE="60">
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Sexo:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       <SELECT NAME="sexo">
+body_modificacion
+
+		if ($arr[1] eq "Masculino")
+		{
+			print "        <OPTION SELECTED>Masculino\n";
+			print "        <OPTION>Femenino\n";
+		}
+		else
+		{
+			print "        <OPTION>Masculino\n";
+			print "        <OPTION SELECTED>Femenino\n";
+		}
+
+		print <<body_modificacion;
+       <SELECT>
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Documento:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       <INPUT TYPE="text" NAME="documento" VALUE="$arr[2]" SIZE="60">
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Direcci&oacute;n:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       <INPUT TYPE="text" NAME="direccion" VALUE="$arr[3]" SIZE="60">
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Localidad:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       <INPUT TYPE="text" NAME="localidad" VALUE="$arr[4]" SIZE="60">
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        C&oacute;digo Postal:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       <INPUT TYPE="text" NAME="codigopostal" VALUE="$arr[5]" SIZE="60">
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Tel&eacute;fono:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       <INPUT TYPE="text" NAME="telefono" VALUE="$arr[6]" SIZE="60">
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        IVA:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Tipo de IVA: 
+       &nbsp;
+       <SELECT NAME="tipoiva">
+body_modificacion
+
+			foreach $tipo_de_iva (@tipo_de_iva)
+			{
+				print "        <OPTION";
+				if ($tipo_de_iva eq $arr[7])
+				{
+					print " SELECTED";
+				}
+				print ">$tipo_de_iva"; 
+			}
+			print <<body_modificacion;
+       </SELECT>
+       &nbsp; &nbsp; &nbsp;
+       Cuit: 
+       &nbsp;
+       <INPUT TYPE="text" NAME="cuit" VALUE="$arr[8]" SIZE="30">
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Plan
+        <BR>
+        contratado:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <SELECT NAME="plan">
+body_modificacion
+		@planes = &listar_planes();
+		foreach $planes (@planes)
+		{
+			($nombre_plan) = ($planes =~ /([^\:]*)/);
+			print "         <OPTION ";
+			if ($nombre_plan eq $arr[13])
+			{
+				print " SELECTED";
+			}
+			print ">$planes\n";
+		}
+
+		print <<body_modificacion_2;
+        </SELECT>
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+body_modificacion_2
+
+		if ($nivel eq "Acceso Total")
+		{
+			print <<body_modificacion;
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Grupo de Usuario:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       <SELECT NAME="grupo">
+body_modificacion
+			@grupos = &listar_grupos();
+			foreach $grupos (@grupos)
+			{
+				print "        <OPTION";
+				if ($grupos eq $arr[14])
+				{
+					print " SELECTED";
+				}
+				print ">$grupos\n";
+			}
+
+		print <<body_modificacion;
+       </SELECT>
+      </FONT>
+     </TD>
+    </TR>
+body_modificacion
+		}
+
+		print <<body_modificacion_2;
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Estado:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+body_modificacion_2
+		print "        <INPUT TYPE=\"radio\" NAME=\"estado\" VALUE=\"Activo\""; 
+		if ($arr[9] eq "Activo")
+		{
+			print " CHECKED";
+		}
+		print ">Activo\n";
+		print "        &nbsp; &nbsp;\n";
+		print "        <INPUT TYPE=\"radio\" NAME=\"estado\" VALUE=\"Inactivo\"";
+		if ($arr[9] eq "Inactivo")
+		{
+			print " CHECKED";
+		}
+		print ">Inactivo\n";
+
+		($anio, $mes, $dia) = split /-/, $arr[12];
+		($anio) = ($anio =~ /.{2}(.{2})/);
+
+		print <<body;
+       &nbsp; &nbsp; &nbsp; &nbsp;
+       Fecha de Alta 
+       &nbsp; &nbsp;
+       <INPUT TYPE="text" NAME="fechaalta" VALUE="$dia/$mes/$anio" SIZE="10">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Ultima fecha de pago: 
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+body
+		($anio, $mes, $dia) = split /-/, $arr[11];
+		($anio) = ($anio =~ /.{2}(.{2})/);
+
+		print <<body;
+        <INPUT TYPE="text" NAME="ultimo_mes_pago" VALUE="$dia/$mes/$anio" SIZE="10">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="Confirmar">
+        &nbsp; &nbsp; &nbsp;
+        <INPUT TYPE="reset" VALUE="Limpiar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body
+	}
+	else
+	{
+		&return_error_mysql ("Error en el proceso", "No se ingreso un elemento para modificar", $dbh->errmsg());
+	}
+}
+else
+{
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/radadm/index.html");
+exit(0);

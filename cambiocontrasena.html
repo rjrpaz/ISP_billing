@@ -1,0 +1,355 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+
+$url = "$server/radadm/abm.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Administraci&oacute;n de Usuarios - Modificaci&oacute;n de Contrase&ntilde;a", "#ffffff");
+
+if ($http_referer =~ m/$url/)
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $search = param('search');
+	my $titulo = "";
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	if ((&obtener_nivel($wwwuser)) ne "Tareas de Consulta")
+	{
+		&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+	}
+
+	$dbh = Mysql->connect($host, $database, $dbuser, $dbpass);
+	if ($search ne "")
+	{
+		my $search_M = $search;
+		$search_M =~ tr/[a-z]/[A-Z]/;
+
+		# Si usuario de consulta tiene agente asociado, limita la consulta a aquellos usuarios
+		# que lo tienen como agente
+
+		if (&usuario_tiene_agente_asociado($wwwuser))
+		{
+			$sql_statement = "SELECT personaldata.UserName, personaldata.Nombre, personaldata.Sexo, personaldata.Documento, personaldata.Direccion, personaldata.Localidad, personaldata.CodigoPostal, personaldata.Telefono, personaldata.Tipo_IVA, personaldata.Cuit, personaldata.Estado, personaldata.Fecha_Alta, personaldata.E_mails, planes.Nombre, personaldata.PersonalDataID FROM personaldata LEFT JOIN planes ON (personaldata.Plan_ID=planes.ID) LEFT JOIN usuarios ON (personaldata.Grupo_ID = usuarios.Grupo_ID) LEFT JOIN agentes ON (agentes.ID = personaldata.Agente_ID) WHERE usuarios.Username like '".$wwwuser."' AND (agentes.Usuario_ID = usuarios.ID) AND ((UPPER(personaldata.Nombre) like '%".$search_M."%') OR (UPPER(personaldata.UserName) like '%".$search_M."%') OR (UPPER(personaldata.E_mails) like '%".$search_M."%'))";
+		}
+		else
+		{
+			$sql_statement = "SELECT personaldata.UserName, personaldata.Nombre, personaldata.Sexo, personaldata.Documento, personaldata.Direccion, personaldata.Localidad, personaldata.CodigoPostal, personaldata.Telefono, personaldata.Tipo_IVA, personaldata.Cuit, personaldata.Estado, personaldata.Fecha_Alta, personaldata.E_mails, planes.Nombre, personaldata.PersonalDataID FROM personaldata LEFT JOIN planes ON (personaldata.Plan_ID=planes.ID) LEFT JOIN usuarios ON (personaldata.Grupo_ID = usuarios.Grupo_ID) WHERE usuarios.Username like '".$wwwuser."' AND ((UPPER(personaldata.Nombre) like '%".$search_M."%') OR (UPPER(personaldata.UserName) like '%".$search_M."%') OR (UPPER(personaldata.E_mails) like '%".$search_M."%'))";
+		}
+
+		$sth = $dbh->query($sql_statement)
+		or die &return_error_mysql ("Error en el proceso", "Hubo un error en la consulta a la Base de Datos.<BR>Consulte al Administrador de la misma", $dbh->errmsg());
+		
+		if ($sth->numrows == 0)
+		{
+			&return_error_mysql ("Error en el proceso", "No tiene permisos para consultar ese Usuario o bien no se encontraron registros que respondan al patr&oacute;n de b&uacute;squeda", $dbh->errmsg());
+		}
+		else
+		{
+
+			print <<body_modificacion_1;
+  <FORM ACTION="cambiocontrasena-realizacion.html" METHOD="post\">
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <TABLE COOL BORDER="1" CELLPADDING="0" CELLSPACING="0" ALIGN="center">
+    <TR>
+     <TD ALIGN="left" COLSPAN="2">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+        Indique el registro al cual desee modificar su contrase&ntilde;a
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+body_modificacion_1
+			while (@arr = $sth->fetchrow)
+			{
+				($apellido, $nombre) = split /, /, $arr[1];
+				$password = &obtener_password ($arr[0]);
+
+       			($anio, $mes, $dia) = split /-/, $arr[11];
+       			($anio) = ($anio =~ /.{2}(.{2})/);
+
+				print "    <TR>\n";
+				print "     <TD ALIGN=\"left\">\n";
+				print "      <INPUT TYPE=\"radio\" NAME=\"modificar\" VALUE=\"$arr[14]\"";
+				if ($sth->numrows == 1)
+				{
+					print " CHECKED";
+				}
+				print ">\n";
+				print "     </TD>\n";
+
+				print "     <TD ALIGN=\"left\">\n";
+				print <<body;
+
+      <TABLE COOL BORDER=\"1\" CELLPADDING="0" CELLSPACING="0" ALIGN="center" WIDTH="100%">
+       <TR>
+        <TD ALIGN="left" COLSPAN="2">
+         <B>
+          <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+           Datos Personales
+          </FONT>
+         </B>
+        </TD>
+       </TR>
+
+       <TR>
+        <TD ALIGN="left">
+         <B>
+          <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+           Apellido:
+          </FONT>
+         </B>
+        </TD>
+        <TD ALIGN="left">
+         <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+          $apellido
+         </FONT>
+        </TD>
+       </TR>
+
+       <TR>
+        <TD ALIGN="left">
+         <B>
+          <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+           Nombre:
+          </FONT>
+         </B>
+        </TD>
+        <TD ALIGN="left">
+         <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+          $nombre
+         </FONT>
+        </TD>
+       </TR>
+
+       <TR>
+        <TD ALIGN="left">
+         <B>
+          <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+           Sexo:
+          </FONT>
+         </B>
+        </TD>
+        <TD ALIGN="left">
+         <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+          $arr[2]
+         </FONT>
+        </TD>
+       </TR>
+
+       <TR>
+        <TD ALIGN="left">
+         <B>
+          <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+           Documento:
+          </FONT>
+         </B>
+        </TD>
+        <TD ALIGN="left">
+         <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+          $arr[3]
+         </FONT>
+        </TD>
+       </TR>
+
+       <TR>
+        <TD ALIGN="left">
+         <B>
+          <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+           Nombre de Usuario:
+          </FONT>
+         </B>
+        </TD>
+        <TD ALIGN="left">
+         <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+          $arr[0]
+         </FONT>
+        </TD>
+       </TR>
+
+       <TR>
+        <TD ALIGN="left">
+         <B>
+          <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+           Contrase&ntilde;a:
+          </FONT>
+         </B>
+        </TD>
+        <TD ALIGN="left">
+         <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+          $password
+         </FONT>
+        </TD>
+       </TR>
+
+       <TR>
+        <TD ALIGN="left">
+         <B>
+          <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+           Direcci&oacute;n:
+          </FONT>
+         </B>
+        </TD>
+        <TD ALIGN="left">
+         <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+          $arr[4]
+         </FONT>
+        </TD>
+       </TR>
+
+       <TR>
+        <TD ALIGN="left">
+         <B>
+          <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+           Localidad:
+          </FONT>
+         </B>
+        </TD>
+        <TD ALIGN="left">
+         <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+          $arr[5]
+         </FONT>
+        </TD>
+       </TR>
+
+       <TR>
+        <TD ALIGN="left">
+         <B>
+          <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+           C&oacute;digo Postal:
+          </FONT>
+         </B>
+        </TD>
+        <TD ALIGN="left">
+         <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+          $arr[6]
+         </FONT>
+        </TD>
+       </TR>
+
+       <TR>
+        <TD ALIGN="left">
+         <B>
+          <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+           Tel&eacute;fono:
+          </FONT>
+         </B>
+        </TD>
+        <TD ALIGN="left">
+         <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+          $arr[7]
+         </FONT>
+        </TD>
+       </TR>
+
+       <TR>
+        <TD ALIGN="left">
+         <B>
+          <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+           IVA:
+          </FONT>
+         </B>
+        </TD>
+        <TD ALIGN="left">
+         <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+          Tipo de IVA:
+          &nbsp;
+          $arr[8]
+          &nbsp; &nbsp; &nbsp;
+          Cuit:
+          &nbsp;
+          $arr[9]
+         </FONT>
+        </TD>
+       </TR>
+
+       <TR>
+        <TD ALIGN="left">
+         <B>
+          <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+           Plan contratado:
+          </FONT>
+         </B>
+        </TD>
+        <TD ALIGN="left">
+         <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+          $arr[13]
+         </FONT>
+        </TD>
+       </TR>
+
+       <TR>
+        <TD ALIGN="left">
+         <B>
+          <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+           Cuentas de E-mail:
+          </FONT>
+         </B>
+        </TD>
+        <TD ALIGN="left">
+         <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+          $arr[12]
+         </FONT>
+        </TD>
+       </TR>
+
+       <TR>
+        <TD ALIGN="left">
+         <B>
+          <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+           Estado:
+          </FONT>
+         </B>
+        </TD>
+        <TD ALIGN="left">
+         <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+          $arr[10]
+          &nbsp; &nbsp; &nbsp; &nbsp;
+          Fecha de Alta
+          &nbsp; &nbsp;
+          $dia/$mes/$anio
+         </FONT>
+        </TD>
+       </TR>
+
+      </TABLE>
+     </TD>
+body
+			}
+
+			print <<body;
+    <TR>
+     <TD ALIGN="center" COLSPAN="2" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="Confirmar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+   </TABLE>
+  </FORM>
+body
+		}
+	}
+	else
+	{
+		&return_error_mysql ("Error en el proceso", "Se debe ingresar alg&uacute;n patr&oacute;n de b&uacute;squeda", $dbh->errmsg());
+	}
+}
+else
+{
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/radadm/index.html");
+exit(0);

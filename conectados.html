@@ -1,0 +1,106 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+use Socket;
+
+$url = "$server/radadm/abm.html";
+$url_1 = "$server/radadm/conectados.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Administraci&oacute;n de Usuarios - Modificaci&oacute;n", "#ffffff");
+
+if (($http_referer =~ m/$url/) || ($http_referer =~ m/$url_1/))
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $session = "";
+	my $usuario = "";
+	my $as = "";
+	my $puerto = "";
+	my $ip = "";
+	my $sesion = "";
+	my $variable = "";
+	my @campos = ();
+	my $comando = "";
+	my %ip_as = ();
+	my %type = ();
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+	$nivel = &obtener_nivel($wwwuser);
+
+	if ($nivel ne "Acceso Total")
+	{
+		&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+	}
+
+	open (NASLIST, "< $naslist");
+	while (<NASLIST>)
+	{
+		chop;
+		next if ($_ =~ /^#/);
+		next if ($_ =~ /^$/);
+		@campos = split /\s+/, $_;
+		$type{$campos[1]} = $campos[2];
+		$ip_as{$campos[1]} = $campos[0];
+	}
+	close (NASLIST);
+
+	open (RADWHO, "$radwho |");
+	while (<RADWHO>)
+	{
+		chop;
+		@campos = split /,/, $_;
+		next if ($campos[0] =~ /Login/);
+		next if ($campos[2] !~ /PPP/);
+
+		$session = param($campos[1]);
+
+		if ($session eq "on")
+		{
+			$variable = $campos[1]."_usuario";
+			$usuario = param($variable);
+			$variable = $campos[1]."_as";
+			$as = param($variable);
+			$variable = $campos[1]."_puerto";
+			$puerto = param($variable);
+			$puerto = "S".$puerto;
+			$variable = $campos[1]."_ip";
+			$ip = param($variable);
+			$variable = $campos[1]."_sesion";
+			$sesion = param($variable);
+
+			if (($usuario eq $campos[0]) && ($as eq $campos[5]) && ($puerto eq $campos[3]) && ($ip eq $campos[6]) && ($sesion eq $campos[4]))
+			{
+				if ($ip_as{$campos[5]} eq '')
+				{
+					$ip_as{$campos[5]} = inet_ntoa(inet_aton($campos[5]));
+				}
+				($campos[3]) = ($campos[3] =~ /S(.*)/);
+				$comando = "$checkrad $type{$campos[5]} $ip_as{$campos[5]} $campos[3] $campos[0] $campos[1]";
+
+				if (system($comando))
+				{
+					$comando = &bajar_interface($ip_as{$campos[5]}, $campos[3]);
+					if ($comando)
+					{
+						&return_error_mysql ("Error en el proceso", "Hubo alg&uacute;n error al intentar desconectar al usuario", "")
+					}
+				}
+			}
+		}
+	}
+	close (RADWHO);
+
+	&menu_conectados ($wwwuser, $wwwpass);
+}
+else
+{
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/radadm/index.html");
+exit(0);

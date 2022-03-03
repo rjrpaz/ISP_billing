@@ -1,0 +1,560 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+
+$url = "$server/radadm/index.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Men&uacute; General", "#ffffff");
+
+if (defined($http_referer) && ($http_referer =~ m/$url/))
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $menu = param('menu');
+	my $nivel = "";
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+	$nivel = &obtener_nivel($wwwuser);
+
+	if ($menu eq "AgentesVenta")
+	{
+		if ($nivel ne "Acceso Total")
+		{
+			&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+		}
+	
+		print <<body;
+  <FORM ACTION="abm-agentes.html" METHOD="post\">
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <TABLE COOL BORDER="0" CELLPADDING="0" CELLSPACING="0" ALIGN="center">
+
+    <TR>
+     <TD COLSPAN="2" ALIGN="center" CONTENT VALIGN="bottom">
+      <H1>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular">
+        Administraci&oacute;n de Agentes de Ventas
+       </FONT>
+      </H1>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="operacion" VALUE="Alta">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Alta de un agente
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="operacion" VALUE="Modificacion">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Modificaci&oacute;n de un agente
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="operacion" VALUE="Baja">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Baja de un agente
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="operacion" VALUE="Listado" CHECKED>
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Listado de agentes
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR HEIGHT="20" cntrlrow>
+     <TD HEIGHT="20" ALIGN="right" XPOS="0" CONTENT VALIGN="middle" CSHEIGHT="32" NOWRAP COLSPAN="2">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="continuar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body
+	}
+	elsif ($menu eq "AdmClaves")
+	{
+		if ($nivel ne "Acceso Total")
+		{
+			&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+		}
+	
+		print <<body;
+  <FORM ACTION="abm-adm.html" METHOD="post\">
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <TABLE COOL BORDER="0" CELLPADDING="0" CELLSPACING="0" ALIGN="center">
+
+    <TR>
+     <TD COLSPAN="2" ALIGN="center" CONTENT VALIGN="bottom">
+      <H1>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular">
+        Administraci&oacute;n de Operadores
+       </FONT>
+      </H1>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="operacion" VALUE="Alta">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Alta de un Operador
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="operacion" VALUE="Modificacion">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Modificaci&oacute;n de un Operador
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="operacion" VALUE="Baja">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Baja de un Operador
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="operacion" VALUE="Listado">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Listado de Operadores
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR HEIGHT="20" cntrlrow>
+     <TD HEIGHT="20" ALIGN="right" XPOS="0" CONTENT VALIGN="middle" CSHEIGHT="32" NOWRAP COLSPAN="2">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="continuar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body
+	}
+	elsif ($menu eq "DefPlanes")
+	{
+		if ($nivel ne "Acceso Total")
+		{
+			&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+		}
+	
+		print <<body;
+  <FORM ACTION="abm-planes.html" METHOD="post\">
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <TABLE COOL BORDER="0" CELLPADDING="0" CELLSPACING="0" ALIGN="center">
+
+    <TR>
+     <TD COLSPAN="2" ALIGN="center" CONTENT VALIGN="bottom">
+      <H1>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular">
+        Definici&oacute;n de Planes
+       </FONT>
+      </H1>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="operacion" VALUE="Alta" CHECKED>
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Creaci&oacute;n de un Plan
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="operacion" VALUE="Modificacion">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Modificaci&oacute;n de un Plan
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="operacion" VALUE="Baja">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Eliminaci&oacute;n de un Plan
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="operacion" VALUE="Listado">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Listado de Planes Existentes
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR HEIGHT="20" cntrlrow>
+     <TD HEIGHT="20" ALIGN="right" XPOS="0" CONTENT VALIGN="middle" CSHEIGHT="32" NOWRAP COLSPAN="2">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD COLSPAN="2" ALIGN="center" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="continuar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body
+	}
+	elsif ($menu eq "GruposUsuarios")
+	{
+		if ($nivel ne "Acceso Total")
+		{
+			&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+		}
+	
+		print <<body;
+  <FORM ACTION="abm-grupos.html" METHOD="post\">
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <TABLE COOL BORDER="0" CELLPADDING="0" CELLSPACING="0" ALIGN="center">
+
+    <TR>
+     <TD COLSPAN="2" ALIGN="center" CONTENT VALIGN="bottom">
+      <H1>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular">
+        Definici&oacute;n de Grupos de Usuarios
+       </FONT>
+      </H1>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="operacion" VALUE="Alta" CHECKED>
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Creaci&oacute;n de un Grupo
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="operacion" VALUE="Modificacion">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Modificaci&oacute;n de un Grupo
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="operacion" VALUE="Baja">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Eliminaci&oacute;n de un Grupo
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="operacion" VALUE="Listado">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Listado de Grupos Existentes
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR HEIGHT="20" cntrlrow>
+     <TD HEIGHT="20" ALIGN="right" XPOS="0" CONTENT VALIGN="middle" CSHEIGHT="32" NOWRAP COLSPAN="2">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD COLSPAN="2" ALIGN="center" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="continuar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body
+	}
+	elsif ($menu eq "AdmUsuarios")
+	{
+		print <<body;
+  <FORM ACTION="abm.html" METHOD="post\">
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <TABLE COOL BORDER="0" CELLPADDING="0" CELLSPACING="0" ALIGN="center">
+
+    <TR>
+     <TD COLSPAN="2" ALIGN="center" CONTENT VALIGN="bottom">
+      <H1>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular">
+        Administraci&oacute;n de Usuarios
+       </FONT>
+      </H1>
+     </TD>
+    </TR>
+body
+
+		if ($nivel eq "Tareas de Consulta")
+		{
+			print <<body;
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="operacion" VALUE="Modificacion">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Consulta de usuario
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="operacion" VALUE="CambioContrasena">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Cambio de contrase&ntilde;a
+      </FONT>
+     </TD>
+    </TR>
+
+body
+		}
+		else
+		{
+			print <<body;
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="operacion" VALUE="Alta">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Alta de usuario
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="operacion" VALUE="Modificacion">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Modificaci&oacute;n de usuario
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="operacion" VALUE="Baja">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Baja de usuario
+      </FONT>
+     </TD>
+    </TR>
+
+body
+
+			if ($nivel eq "Acceso Total")
+			{
+				print <<body;
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="operacion" VALUE="Conectados">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Usuarios Conectados Actualmente
+      </FONT>
+     </TD>
+    </TR>
+body
+			}
+
+			print <<body;
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="operacion" VALUE="Mail">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Acceso al Mail de un Usuario
+      </FONT>
+     </TD>
+    </TR>
+
+body
+		}
+
+		print <<body;
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="operacion" VALUE="Chequeo">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Chequeo de contrase&ntilde;a
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="operacion" VALUE="Listado">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Listado de Usuarios
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="operacion" VALUE="Individuales" CHECKED>
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Reporte de Consumos Individuales
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="operacion" VALUE="Totales">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Reporte de Consumos Totales
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR HEIGHT="20" cntrlrow>
+     <TD HEIGHT="20" ALIGN="right" XPOS="0" CONTENT VALIGN="middle" CSHEIGHT="32" NOWRAP COLSPAN="2">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="continuar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body
+	}
+	else
+	{
+		&return_error_mysql ("Error en el proceso", "La opci&oacute;n del men&uacute; que se ha ingresado no est&aacute; definida", "");
+	}
+}
+else
+{
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/radadm/index.html");
+
+exit;

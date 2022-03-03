@@ -1,0 +1,244 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+
+$url = "$server/radadm/abm-agentes.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Administraci&oacute;n de Agentes de Ventas - Alta", "#ffffff");
+
+if ($http_referer =~ m/$url/)
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $nombre = param('nombre');
+	my $direccion = param('direccion');
+	my $telefono = param('telefono');
+	my $localidad = param('localidad');
+	my $descripcion = param('descripcion');
+	my $usuario = param('usuario');
+	my $password = param('password');
+	my $grupo = param('grupo');
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	if ((&obtener_nivel($wwwuser)) ne "Acceso Total")
+	{
+		&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+	}
+
+	if ($usuario eq "")
+	{
+		&return_error_mysql ("Error en el proceso", "No se ingres&oacute; nombre del Usuario Operador Asociado", "")
+	}
+
+	##########################################
+	# Chequea si el nombre ya esta utilizado #
+	##########################################
+	$nombre = &acomodar_case($nombre);
+	if (&nombre_existente_agentes($nombre))
+	{
+		&return_error_mysql ("Error en el proceso", "El nombre <b> $nombre </b> ya est&aacute; ocupado por otro Agente", "")
+	}
+
+	############################################
+	# Chequea si el username ya esta utilizado #
+	############################################
+	if (&usuario_existente_usuarios($usuario))
+	{
+		&return_error_mysql ("Error en el proceso", "El nombre de usuario <b> $usuario </b> ya est&aacute; ocupado por otro Operador", "")
+	}
+
+	################################################
+	# Chequea si la password tiene un largo minimo #
+	################################################
+	if ($password !~ m/(.{$tamanio_minimo_contrasenia})/)
+	{
+		&return_error_mysql ("Error en el proceso", "Es conveniente que la contrase&ntilde;a del Usuario Operador Asociado tenga al menos $tamanio_minimo_contrasenia caracteres de largo", "")
+	}
+
+	################################################
+	# Elimina caracteres no numericos del telefono #
+	################################################
+	$telefono =~ s/[^\d]//g;
+
+	###################################
+	# Acomoda mayusculas y minusculas #
+	###################################
+	$direccion = &acomodar_case($direccion);
+
+	print <<body_alta;
+
+  <FORM ACTION="alta-agentes-final.html" METHOD="post\">
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <INPUT TYPE="hidden" NAME="nombre" VALUE="$nombre">
+   <INPUT TYPE="hidden" NAME="direccion" VALUE="$direccion">
+   <INPUT TYPE="hidden" NAME="telefono" VALUE="$telefono">
+   <INPUT TYPE="hidden" NAME="localidad" VALUE="$localidad">
+   <INPUT TYPE="hidden" NAME="descripcion" VALUE="$descripcion">
+   <INPUT TYPE="hidden" NAME="usuario" VALUE="$usuario">
+   <INPUT TYPE="hidden" NAME="password" VALUE="$password">
+   <INPUT TYPE="hidden" NAME="grupo" VALUE="$grupo">
+   <TABLE COOL BORDER="1" CELLPADDING="0" CELLSPACING="0" ALIGN="center">
+
+    <TR>
+     <TD ALIGN="left" COLSPAN="2">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+        Datos Personales del Agente de Ventas (Confirmaci&oacute;n)
+        <BR>
+        Confirmar los datos:
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Nombre:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $nombre
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Direcci&oacute;n:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $direccion
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Tel&eacute;fono:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $telefono
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Localidad:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $localidad
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Descripci&oacute;n:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $descripcion
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Usuario Operador Asociado
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $usuario
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Contrase&ntilde;a del Usuario
+        <BR>
+        Operador Asociado
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $password
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Grupo:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $grupo
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="Confirmar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body_alta
+}
+else
+{
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/radadm/index.html");
+exit(0);
+

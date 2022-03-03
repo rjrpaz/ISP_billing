@@ -1,0 +1,93 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+
+$url = "$server/radadm/baja-confirmacion.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Administraci&oacute;n de Usuarios - Baja", "#ffffff");
+
+if ($http_referer =~ m/$url/)
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $eliminar = param('eliminar');
+	my @cuentas_a_borrar = ();
+	my $cuentas_a_borrar = "";
+	my $usuario = "";
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	if ((&obtener_nivel($wwwuser)) eq "Tareas de Consulta")
+	{
+		&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+	}
+
+	#################################
+	# Elimina las cuentas de E-mail #
+	#################################
+
+	$dbh = Mysql->connect($host, $database, $dbuser, $dbpass);
+	$sql_statement = "SELECT E_mails, Username FROM personaldata WHERE (PersonalDataID = ".$eliminar.")";
+
+	$sth = $dbh->query($sql_statement)
+	or die &return_error_mysql ("Error en el proceso", "Hubo un error en la consulta a la Base de Datos.<BR>Consulte al Administrador de la misma", $dbh->errmsg());
+	($cuentas_a_borrar, $usuario) = $sth->fetchrow;
+	@cuentas_a_borrar = split /\,/, $cuentas_a_borrar;
+
+	foreach $cuentas_a_borrar (@cuentas_a_borrar)
+	{
+		&baja_so($cuentas_a_borrar);
+		&baja_hosting($cuentas_a_borrar);
+	}
+
+	#########################################
+	# Elimina entrada en tabla personaldata #
+	#########################################
+	&baja_personaldata($usuario);
+
+	########################################
+	# Elimina entrada en la tabla radcheck #
+	########################################
+	&baja_radcheck($usuario);
+
+	########################################
+	# Elimina entrada en la tabla radreply #
+	########################################
+	&baja_radreply($usuario);
+
+	###########################################
+	# Elimina entrada en el Sistema Operativo #
+	###########################################
+	&baja_so($usuario);
+
+	#######################################
+	# Modifica la simultaneidad de acceso #
+	# ----------------PENDIENTE --------- #
+	#######################################
+
+	&insertar_log ($wwwuser, "Baja de Usuario", "Usuario: $usuario, E-mails: @cuentas_a_borrar");
+
+print <<body;
+
+  <DIV ALIGN="center">
+   <B>
+    <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+     Hecho ...
+    </FONT>
+   </B>
+  </DIV>
+
+body
+}
+else
+{
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/radadm/index.html");
+exit(0);

@@ -1,0 +1,465 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+
+$url = "$server/radadm/modificacion-realizacion.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Administraci&oacute;n de Usuarios - Modificaci&oacute;n", "#ffffff");
+
+if ($http_referer =~ m/$url/)
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $apellido = param('apellido');
+	my $nombre = param('nombre');
+	my $sexo = param('sexo');
+	my $documento = param('documento');
+	my $direccion = param('direccion');
+	my $localidad = param('localidad');
+	my $codigopostal = param('codigopostal');
+	my $telefono = param('telefono');
+	my $tipoiva = param('tipoiva');
+	my $cuit = param('cuit');
+	my $plan = param('plan');
+	my $grupo = param('grupo');
+	my $estado = param('estado');
+	my $ultimo_mes_pago = param('ultimo_mes_pago');
+	my $fechaalta = param('fechaalta');
+	my $personaldata_id = param('personaldata_id');
+	my $cantidad_e_mail = 0;
+	my $acceso_simultaneo = 0;
+	my $contador = 1;
+	my @e_mails_existentes = ();
+	my $usuario = "";
+	my $agente = "";
+	my $password = "";
+	my $e_mails = "";
+	my @agentes = ();
+	my $nivel = "";
+	my $hosting = "No";
+	my $colspan = 2;
+	my $colspan_total = 3;
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	$nivel = &obtener_nivel($wwwuser);
+	if ($nivel eq "Tareas de Consulta")
+	{
+		&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+	}
+
+	################################################
+	# Elimina caracteres no numericos del telefono #
+	################################################
+	$telefono =~ s/[^\d]//g; 
+
+	###################################
+	# Acomoda mayusculas y minusculas #
+	###################################
+	$apellido = &acomodar_case($apellido);
+	$nombre = &acomodar_case($nombre);
+	$direccion = &acomodar_case($direccion);
+
+	if ($ultimo_mes_pago !~ /^\d+\/\d+\/\d+$/)
+	{
+		&return_error_mysql ("Error en el proceso", "La Fecha de Ultimo Pago no tiene un formato adecuado: dd/mm/aa", "")
+	}
+
+	if ($fechaalta !~ /^\d+\/\d+\/\d+$/)
+	{
+		$fechaalta = `/bin/date +%d/%m/%y`;
+		($fechaalta) = ($fechaalta =~ /([^\n]*)/);
+	}
+
+	@elementos_plan = split /,/, $plan;
+	foreach $elementos_plan (@elementos_plan)
+	{
+		if ($elementos_plan =~ /E-mail/)
+		{
+			($cantidad_e_mail) = ($elementos_plan =~ /\s([^E]*)/);
+		}
+		if ($elementos_plan =~ /Acceso/)
+		{
+			($acceso_simultaneo) = ($elementos_plan =~ /:\s([^A]*)/);
+		}
+		if ($elementos_plan =~ /Horas/)
+		{
+			$mora = "No";
+		}
+		if ($elementos_plan =~ /Hosting/)
+		{
+			$colspan = 3;
+			$colspan_total = 4;
+			$hosting = "Si";
+		}
+	}
+
+	$dbh = Mysql->connect($host, $database, $dbuser, $dbpass);
+	$errmsg = Mysql->errmsg();
+	if ($errmsg ne "")
+	{
+		&return_error_mysql ("Error en el proceso", "Existi&oacute; al intentarse la conexi&oacute;n a la Base de Datos.<BR>Consulte al Administrador de la misma", $errmsg);
+	}
+
+	$sql_statement = "SELECT agentes.Nombre, personaldata.UserName, personaldata.E_mails, personaldata.Exceso_Horas FROM personaldata LEFT JOIN agentes ON (personaldata.Agente_ID = agentes.ID) WHERE personaldata.PersonalDataID = ".$personaldata_id;
+
+	$sth = $dbh->query($sql_statement)
+	or die &return_error_mysql ("Error en el proceso", "Hubo un error en la consulta a la Base de Datos.<BR>Consulte al Administrador de la misma", $dbh->errmsg());
+	($agente, $usuario, $e_mails, $exceso_horas) = $sth->fetchrow;
+
+	if ($usuario ne "")
+	{
+		$sql_statement = "SELECT Value FROM radcheck WHERE UserName like '".$usuario."' AND Attribute like 'Password'";
+		$sth = $dbh->query($sql_statement)
+		or die &return_error_mysql ("Error en el proceso", "Hubo un error en la consulta a la Base de Datos.<BR>Consulte al Administrador de la misma", $dbh->errmsg());
+		$password = $sth->fetchrow;
+	}
+	else
+	{
+		$password = "";
+	}
+
+	@e_mails_existentes = split /\,/, $e_mails;
+
+	print <<body_alta;
+
+  <FORM ACTION="modificacion-final.html" METHOD="post\">
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <INPUT TYPE="hidden" NAME="apellido" VALUE="$apellido">
+   <INPUT TYPE="hidden" NAME="nombre" VALUE="$nombre">
+   <INPUT TYPE="hidden" NAME="sexo" VALUE="$sexo">
+   <INPUT TYPE="hidden" NAME="documento" VALUE="$documento">
+   <INPUT TYPE="hidden" NAME="direccion" VALUE="$direccion">
+   <INPUT TYPE="hidden" NAME="localidad" VALUE="$localidad">
+   <INPUT TYPE="hidden" NAME="codigopostal" VALUE="$codigopostal">
+   <INPUT TYPE="hidden" NAME="telefono" VALUE="$telefono">
+   <INPUT TYPE="hidden" NAME="tipoiva" VALUE="$tipoiva">
+   <INPUT TYPE="hidden" NAME="cuit" VALUE="$cuit">
+   <INPUT TYPE="hidden" NAME="plan" VALUE="$plan">
+   <INPUT TYPE="hidden" NAME="grupo" VALUE="$grupo">
+   <INPUT TYPE="hidden" NAME="estado" VALUE="$estado">
+   <INPUT TYPE="hidden" NAME="ultimo_mes_pago" VALUE="$ultimo_mes_pago">
+   <INPUT TYPE="hidden" NAME="fechaalta" VALUE="$fechaalta">
+   <INPUT TYPE="hidden" NAME="personaldata_id" VALUE="$personaldata_id">
+   <INPUT TYPE="hidden" NAME="usuario_original" VALUE="$usuario">
+   <TABLE COOL BORDER="1" CELLPADDING="0" CELLSPACING="0" ALIGN="center">
+
+    <TR>
+     <TD ALIGN="left" COLSPAN="$colspan_total">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+        Datos Personales (Paso 2)
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Agente de Ventas Asociado:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left" COLSPAN="$colspan">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       <SELECT NAME="agente">
+body_alta
+
+	if ($nivel eq "Tareas Operativas")
+    {
+		$grupo = &obtener_grupo_usuario($wwwuser);
+	}
+
+	@agentes = &listar_agentes($grupo);
+	foreach $agentes (@agentes)
+	{
+		print "        <OPTION";
+		if ($agentes eq $agente)
+		{
+			print " SELECTED";
+		}
+		print ">$agentes\n";
+	}
+	print <<body;
+       </SELECT>
+      </FONT>
+     </TD>
+    </TR>
+body
+
+	if ($mora eq "No")
+    {
+		print <<body;
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Acci&oacute;n al excederse
+        <BR>
+        en el tiempo de consumo:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left" COLSPAN="$colspan">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       <SELECT NAME="mora">
+body
+
+		print "         <OPTION";
+		if ($exceso_horas eq "Facturar Excedente")
+		{
+			print " SELECTED";
+		}
+		print ">Facturar Excedente\n";
+		print "         <OPTION";
+		if ($exceso_horas eq "Corte de Servicio")
+		{
+			print " SELECTED";
+		}
+		print ">Corte de Servicio\n";
+
+		print <<body;
+       </SELECT>
+      </FONT>
+     </TD>
+    </TR>
+body
+	}
+	else
+	{
+		print "    <INPUT TYPE=\"hidden\" NAME=\"mora\" VALUE=\"Corte de Servicio\">\n";
+	}
+
+	if ($acceso_simultaneo != 0)
+	{
+		print <<body_alta;
+    <TR>
+     <TD ALIGN="center" COLSPAN="$colspan_total">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+        Informaci&oacute;n sobre Dial-Up:
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Nombre de Usuario:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left" COLSPAN="$colspan">
+      <INPUT TYPE="text" NAME="usuario" VALUE="$usuario" SIZE="40">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Contrase&ntilde;a:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left" COLSPAN="$colspan">
+      <INPUT TYPE="text" NAME="password" VALUE="$password" SIZE="40">
+     </TD>
+    </TR>
+body_alta
+	}
+
+	print <<body;
+    <TR BGCOLOR="#ffebcd">
+     <TD ALIGN="center" COLSPAN="$colspan_total" HEIGHT="25">
+      &nbsp;
+     </TD>
+    <TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="$colspan_total">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+        Informaci&oacute;n sobre E-mail:
+        <BR>
+        (Estas direcciones de E-mail son las que actualmente est&aacute; asociadas al Usuario indicado. Marque las direcciones que desea eliminar. Coloque una nueva contrase&ntilde;a en el caso de que desee cambiar la contrase&ntilde;a actual ).
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="red">
+       <B>
+        Eliminar
+       </B>
+      </FONT>
+     </TD>
+body
+	if ($hosting eq "Si")
+	{
+		print <<body;
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       <B>
+        Hosting
+       </B>
+      </FONT>
+     </TD>
+body
+	}
+	print <<body;
+
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       <B>
+        Usuario
+       </B>
+      </FONT>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       <B>
+        Nueva Contrase&ntilde;a
+        (si desea dejar la contrase&ntilde;a actual, deje el campo vacio).
+       </B>
+      </FONT>
+     </TD>
+    </TR>
+body
+	foreach $e_mails_existentes (@e_mails_existentes)
+	{
+		print "    <TR>\n";
+		print "     <TD ALIGN=\"center\">\n";
+		print "      <INPUT TYPE=\"checkbox\" NAME=\"".$e_mails_existentes."\">\n";
+		print "     </TD>\n";
+		if ($hosting eq "Si")
+		{
+			print "     <TD ALIGN=\"center\">\n";
+			print "      <INPUT TYPE=\"radio\" NAME=\"cuenta_hosting\" VALUE=\"".$e_mails_existentes."\"";
+			if ((&usuario_existente_hosting($e_mails_existentes)) != 0)
+			{
+				print " CHECKED";
+			}
+			print ">\n";
+			print "     </TD>\n";
+		}
+		print "     <TD ALIGN=\"center\">\n";
+		print "      <FONT FACE=\"Arial,Helvetica,Geneva,Swiss,SunSans-Regular\" COLOR=\"black\">\n";
+		print "       <B>\n";
+		print "        $e_mails_existentes\n";
+		print "       </B>\n";
+		print "      </FONT>\n";
+		print "     </TD>\n";
+		print "     <TD ALIGN=\"center\">\n";
+		print "      <FONT FACE=\"Arial,Helvetica,Geneva,Swiss,SunSans-Regular\" COLOR=\"black\">\n";
+		print "       <INPUT TYPE=\"text\" NAME=\"".$e_mails_existentes."_password\" SIZE=\"30\">\n";
+		print "      </FONT>\n";
+		print "     </TD>\n";
+		print "    </TR>\n";
+	}
+
+	print <<body;
+    <TR BGCOLOR="#ffebcd">
+     <TD ALIGN="center" COLSPAN="$colspan_total" HEIGHT="25">
+      &nbsp;
+     </TD>
+    <TR>
+
+    <TR>
+     <TD ALIGN="center">
+      &nbsp; &nbsp; &nbsp;
+     </TD>
+body
+	if ($hosting eq "Si")
+	{
+		print <<body;
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       <B>
+        Hosting
+       </B>
+      </FONT>
+     </TD>
+body
+	}
+	print <<body;
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       <B>
+        Usuario
+       </B>
+      </FONT>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       <B>
+        Contrase&ntilde;a
+       </B>
+      </FONT>
+     </TD>
+    </TR>
+body
+
+	while ($contador <= $cantidad_e_mail)
+	{
+		print "    <TR>\n";
+		print "     <TD ALIGN=\"left\">\n";
+		print "      <B>\n";
+		print "       <FONT FACE=\"Arial,Helvetica,Geneva,Swiss,SunSans-Regular\" COLOR=\"black\">\n";
+		print "        $contador )\n";
+		print "       </FONT>\n";
+		print "      </B>\n";
+		print "     </TD>\n";
+		if ($hosting eq "Si")
+		{
+			print "     <TD ALIGN=\"center\">\n";
+			print "      <INPUT TYPE=\"radio\" NAME=\"cuenta_hosting\" VALUE=\"e_mail_cuenta_".$contador."\">\n";
+			print "     </TD>\n";
+		}
+		print "     <TD ALIGN=\"center\">\n";
+		print "      <FONT FACE=\"Arial,Helvetica,Geneva,Swiss,SunSans-Regular\" COLOR=\"black\">\n";
+		print "       <INPUT TYPE=\"text\" NAME=\"e_mail_cuenta_$contador\" SIZE=\"30\">\n";
+		print "      </FONT>\n";
+		print "     </TD>\n";
+		print "     <TD ALIGN=\"center\">\n";
+		print "      <FONT FACE=\"Arial,Helvetica,Geneva,Swiss,SunSans-Regular\" COLOR=\"black\">\n";
+		print "       <INPUT TYPE=\"text\" NAME=\"e_mail_password_$contador\" SIZE=\"30\">\n";
+		print "      </FONT>\n";
+		print "     </TD>\n";
+		print "    </TR>\n";
+		$contador++;
+	}
+
+	print <<body_alta;
+    <TR>
+     <TD ALIGN="center" COLSPAN="$colspan_total" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="Confirmar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body_alta
+}
+else
+{
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/radadm/index.html");
+exit(0);

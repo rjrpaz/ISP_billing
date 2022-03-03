@@ -1,0 +1,905 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+use Spreadsheet::WriteExcel::Simple;
+
+$url = "$server/radadm/abm.html";
+$url_1 = "$server/radadm/listado.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+my $ss = Spreadsheet::WriteExcel::Simple->new;
+
+if (($http_referer =~ m/$url/) || ($http_referer =~ m/$url_1/))
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $formato = param('formato');
+	my $plan = param('plan');
+	my $activo = param('activo');
+	my $inactivo = param('inactivo');
+	my $facturar_excedente = param('facturar_excedente');
+	my $corte_de_servicio = param('corte_de_servicio');
+	my $localidad = param('localidad');
+	my $mostrar_nro_cliente = param('mostrar_nro_cliente');
+	my $mostrar_sexo = param('mostrar_sexo');
+	my $mostrar_documento = param('mostrar_documento');
+	my $mostrar_direccion = param('mostrar_direccion');
+	my $mostrar_localidad = param('mostrar_localidad');
+	my $mostrar_codpostal = param('mostrar_codpostal');
+	my $mostrar_telefono = param('mostrar_telefono');
+	my $mostrar_tipoiva = param('mostrar_tipoiva');
+	my $mostrar_cuit = param('mostrar_cuit');
+	my $mostrar_fecha_pago = param('mostrar_fecha_pago');
+	my $mostrar_fecha_alta = param('mostrar_fecha_alta');
+	my $mostrar_cantidad_horas = param('mostrar_cantidad_horas');
+	my $sql_statement = "";
+	my $grupo = "";
+	my $agente = "";
+	my $where = "";
+
+	if ($formato eq "html")
+	{
+		print header();
+		&head_html("", "Radius - Administraci&oacute;n de Usuarios - Listado", "#ffffff");
+	}
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+	$nivel = &obtener_nivel($wwwuser);
+
+	$dbh = Mysql->connect($host, $database, $dbuser, $dbpass);
+
+	if ($plan ne "Todos")
+	{
+		$where = " WHERE (planes.Nombre like '".$plan."')";
+	}
+
+	if ($nivel eq "Acceso Total")
+	{
+		$grupo = param('grupo');
+	}
+	else
+	{
+		$sql_statement = "SELECT grupos.Nombre FROM grupos LEFT JOIN usuarios ON (usuarios.Grupo_ID=grupos.ID) WHERE (usuarios.Username like '".$wwwuser."')";
+		$sth = $dbh->query($sql_statement)
+		or die &return_error_mysql ("Error en el proceso", "Error en Consulta a la Base de Datos.<BR>Consulte al Administrador de la misma.", "");
+		$grupo = $sth ->fetchrow;
+	}
+
+	if ($grupo ne "Todos")
+	{
+		if ($where eq "")
+		{
+			$where = " WHERE";
+		}
+		else
+		{
+			$where = $where." AND";
+		}
+		$where = $where." (grupos.Nombre like '".$grupo."')";
+	}
+
+	if ((&usuario_tiene_agente_asociado($wwwuser)) == 0)
+	{
+		$agente = param('agente');
+	}
+	else
+	{
+		$sql_statement = "SELECT agentes.Nombre FROM agentes LEFT JOIN usuarios ON (agentes.Usuario_ID=usuarios.ID) WHERE (usuarios.Username like '".$wwwuser."')";
+		$sth = $dbh->query($sql_statement)
+		or die &return_error_mysql ("Error en el proceso", "Error en Consulta a la Base de Datos.<BR>Consulte al Administrador de la misma.", "");
+		$agente = $sth ->fetchrow;
+	}
+
+	if ($agente ne "Todos")
+	{
+		if ($where eq "")
+		{
+			$where = " WHERE";
+		}
+		else
+		{
+			$where = $where." AND";
+		}
+		$where = $where." (agentes.Nombre like '".$agente."')";
+	}
+
+	if (($activo ne "on") || ($inactivo ne "on"))
+	{
+		if (($activo ne "on") && ($inactivo ne "on"))
+		{
+			&return_error_mysql ("Error en el proceso", "Debe elegir al menos los usuarios activos o inactivos", "");
+		}
+		if ($where eq "")
+		{
+			$where = " WHERE";
+		}
+			else
+		{
+			$where = $where." AND";
+		}
+		if ($activo eq "on")
+		{
+			$where = $where." (personaldata.Estado like 'Activo')";
+		}
+		if ($inactivo eq "on")
+		{
+			$where = $where." (personaldata.Estado like 'Inactivo')";
+		}
+	}
+
+	if (($facturar_excedente ne "on") || ($corte_de_servicio ne "on"))
+	{
+		if (($facturar_excedente ne "on") && ($corte_de_servicio ne "on"))
+		{
+			&return_error_mysql ("Error en el proceso", "Debe elegir al menos los usuarios a los cuales se les Factura Excedente o se les Corta el Servicio", "");
+		}
+		if ($where eq "")
+		{
+			$where = " WHERE";
+		}
+			else
+		{
+			$where = $where." AND";
+		}
+		if ($facturar_excedente eq "on")
+		{
+			$where = $where." (personaldata.Exceso_Horas like 'Facturar Excedente')";
+		}
+		if ($corte_de_servicio eq "on")
+		{
+			$where = $where." (personaldata.Exceso_Horas like 'Corte de Servicio')";
+		}
+	}
+
+	if ($localidad ne "")
+	{
+		$localidad_original = $localidad;
+		$localidad =~ tr/[a-z]/[A-Z]/;
+		if ($where eq "")
+		{
+			$where = " WHERE";
+		}
+		else
+		{
+			$where = $where." AND";
+		}
+		$where = $where." ((UPPER(personaldata.Localidad)) like '%".$localidad."%')";
+	}
+
+	$sql_statement = "SELECT personaldata.UserName, personaldata.Nombre, personaldata.Sexo, personaldata.Documento, personaldata.Direccion, personaldata.Localidad, personaldata.CodigoPostal, personaldata.Telefono, personaldata.Tipo_IVA, personaldata.Cuit, personaldata.Estado, personaldata.Exceso_Horas, personaldata.Ultimo_Mes_Pago, personaldata.Fecha_Alta, personaldata.E_mails, planes.Nombre, agentes.Nombre, grupos.Nombre, personaldata.PersonalDataID, planes.Cantidad_Horas FROM personaldata LEFT JOIN planes ON (personaldata.Plan_ID=planes.ID) LEFT JOIN grupos ON (personaldata.Grupo_ID = grupos.ID) LEFT JOIN agentes ON (personaldata.Agente_ID = agentes.ID)";
+	if ($where ne "")
+	{
+		$sql_statement = $sql_statement.$where;
+	}
+
+	$sql_statement = $sql_statement." ORDER BY personaldata.UserName";
+
+	$sth = $dbh->query($sql_statement)
+	or die &return_error_mysql ("Error en el proceso", "Hubo un error al Intentar obtener la palabra clave de la Base de Datos.<BR>Consulte al Administrador de la misma.", "");
+
+	if ($formato eq "pdf")
+	{
+		open (FILETEMP, ">/tmp/$$.html");
+		select FILETEMP; 
+		print <<Eof_Head;
+<HTML>
+ <HEAD>
+  <TITLE>
+   Radius - Administraci&oacute;n de Usuarios - Listado
+  </TITLE>
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+Eof_Head
+	}
+
+	if ($formato eq "html")
+	{
+		$grupo_original = $grupo;
+		$grupo =~ s/(\W)/sprintf("%%%x", ord($1))/eg;
+		$agente_original = $agente;
+		$agente =~ s/(\W)/sprintf("%%%x", ord($1))/eg;
+		$plan_original = $plan;
+		$plan =~ s/(\W)/sprintf("%%%x", ord($1))/eg;
+		$localidad =~ s/(\W)/sprintf("%%%x", ord($1))/eg;
+		print "  <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" size=\"4\">\n";
+		print "   <DIV ALIGN=\"right\">\n";
+		print "    <A HREF=\"listado.html?wwwuser=$wwwuser&wwwpass=$wwwpass&grupo=$grupo&agente=$agente&plan=$plan&activo=$activo&inactivo=$inactivo&facturar_excedente=$facturar_excedente&corte_de_servicio=$corte_de_servicio&localidad=$localidad&mostrar_nro_cliente=$mostrar_nro_cliente&mostrar_sexo=$mostrar_sexo&mostrar_documento=$mostrar_documento&mostrar_direccion=$mostrar_direccion&mostrar_localidad=$mostrar_localidad&mostrar_codpostal=$mostrar_codpostal&mostrar_telefono=$mostrar_telefono&mostrar_tipoiva=$mostrar_tipoiva&mostrar_cuit=$mostrar_cuit&mostrar_fecha_pago=$mostrar_fecha_pago&mostrar_fecha_alta=$mostrar_fecha_alta&mostrar_cantidad_horas=$mostrar_cantidad_horas&formato=csv\">\n";
+		print "     <B>\n";
+		print "      .csv\n";
+		print "     </B>\n";
+		print "    </A>\n";
+		print "    &nbsp;\n";
+		print "    <A HREF=\"listado.html?wwwuser=$wwwuser&wwwpass=$wwwpass&grupo=$grupo&agente=$agente&plan=$plan&activo=$activo&inactivo=$inactivo&facturar_excedente=$facturar_excedente&corte_de_servicio=$corte_de_servicio&localidad=$localidad&mostrar_nro_cliente=$mostrar_nro_cliente&mostrar_sexo=$mostrar_sexo&mostrar_documento=$mostrar_documento&mostrar_direccion=$mostrar_direccion&mostrar_localidad=$mostrar_localidad&mostrar_codpostal=$mostrar_codpostal&mostrar_telefono=$mostrar_telefono&mostrar_tipoiva=$mostrar_tipoiva&mostrar_cuit=$mostrar_cuit&mostrar_fecha_pago=$mostrar_fecha_pago&mostrar_fecha_alta=$mostrar_fecha_alta&mostrar_cantidad_horas=$mostrar_cantidad_horas&formato=xls\">\n";
+		print "     <B>\n";
+		print "      .xls\n";
+		print "     </B>\n";
+		print "    </A>\n";
+		print "    &nbsp;\n";
+		print "    <A HREF=\"listado.html?wwwuser=$wwwuser&wwwpass=$wwwpass&grupo=$grupo&agente=$agente&plan=$plan&activo=$activo&inactivo=$inactivo&facturar_excedente=$facturar_excedente&corte_de_servicio=$corte_de_servicio&localidad=$localidad&mostrar_nro_cliente=$mostrar_nro_cliente&mostrar_sexo=$mostrar_sexo&mostrar_documento=$mostrar_documento&mostrar_direccion=$mostrar_direccion&mostrar_localidad=$mostrar_localidad&mostrar_codpostal=$mostrar_codpostal&mostrar_telefono=$mostrar_telefono&mostrar_tipoiva=$mostrar_tipoiva&mostrar_cuit=$mostrar_cuit&mostrar_fecha_pago=$mostrar_fecha_pago&mostrar_fecha_alta=$mostrar_fecha_alta&mostrar_cantidad_horas=$mostrar_cantidad_horas&formato=pdf\">\n";
+		print "     <B>\n";
+		print "      .pdf\n";
+		print "     </B>\n";
+		print "    </A>\n";
+		print "   </DIV>\n";
+		print "  </FONT>\n";
+		print "  <BR>\n";
+	}
+
+	if ($formato eq "xls")
+	{
+		@titulos = ("Nombre de Usuario", "Apellido y Nombre");
+		if ($mostrar_nro_cliente eq "on")
+		{
+			@titulos = (@titulos, "Nro. Cliente");
+		}
+		if ($mostrar_sexo eq "on")
+		{
+			@titulos = (@titulos, "Sexo");
+		}
+		if ($mostrar_documento eq "on")
+		{
+			@titulos = (@titulos, "Documento");
+		}
+		if ($mostrar_direccion eq "on")
+		{
+			@titulos = (@titulos, "Direccion");
+		}
+		if ($mostrar_localidad eq "on")
+		{
+			@titulos = (@titulos, "Localidad");
+		}
+		if ($mostrar_codpostal eq "on")
+		{
+			@titulos = (@titulos, "Codigo Postal");
+		}
+		if ($mostrar_telefono eq "on")
+		{
+			@titulos = (@titulos, "Telefono");
+		}
+		if ($mostrar_tipoiva eq "on")
+		{
+			@titulos = (@titulos, "Tipo I.V.A.");
+		}
+		if ($mostrar_cuit eq "on")
+		{
+			@titulos = (@titulos, "CUIT");
+		}
+		@titulos = (@titulos, "Estado", "Acc. ante mora");
+		if ($mostrar_fecha_pago eq "on")
+		{
+			@titulos = (@titulos, "Ult. Fecha de Pago");
+		}
+		if ($mostrar_fecha_alta eq "on")
+		{
+			@titulos = (@titulos, "Fecha de Alta");
+		}
+		@titulos = (@titulos, "E-mails", "Plan");
+		if ($mostrar_cantidad_horas eq "on")
+		{
+			@titulos = (@titulos, "Cant. de Horas");
+		}
+		@titulos = (@titulos, "Grupo", "Agente de Ventas");
+		$ss->write_row(\@titulos);
+	}
+	elsif ($formato eq "csv")
+	{
+		print "Content-Type: text/plain\n\n";
+		print "Nombre de Usuario,Apellido y Nombre";
+		if ($mostrar_nro_cliente eq "on")
+		{
+			print ",Nro. Cliente";
+		}
+		if ($mostrar_sexo eq "on")
+		{
+			print ",Sexo";
+		}
+		if ($mostrar_documento eq "on")
+		{
+			print ",Documento";
+		}
+		if ($mostrar_direccion eq "on")
+		{
+			print ",Direccion";
+		}
+		if ($mostrar_localidad eq "on")
+		{
+			print ",Localidad";
+		}
+		if ($mostrar_codpostal eq "on")
+		{
+			print ",Codigo Postal";
+		}
+		if ($mostrar_telefono eq "on")
+		{
+			print ",Telefono";
+		}
+		if ($mostrar_tipoiva eq "on")
+		{
+			print ",Tipo I.V.A.";
+		}
+		if ($mostrar_cuit eq "on")
+		{
+			print ",CUIT";
+		}
+		print ",Estado,Accion ante mora";
+		if ($mostrar_fecha_pago eq "on")
+		{
+			print ",Ult. Fecha de Pago";
+		}
+		if ($mostrar_fecha_alta eq "on")
+		{
+			print ",Fecha de Alta";
+		}
+		print ",E-mails,Plan";
+		if ($mostrar_cantidad_horas eq "on")
+		{
+			print ",Cantidad de Horas";
+		}
+		print ",Grupo,Agente de Ventas\n";
+	}
+	else
+	{
+		print "  <TABLE bgcolor=\"#ffffff\" BORDER=\"0\" CELLPADDING=\"0\" CELLSPACING=\"0\" ALIGN=\"center\">\n";
+		print "   <TR BGCOLOR=\"#daa520\" HEIGHT=\"16\">\n";
+		print "    <TD ALIGN=\"center\" WIDTH=150 VALIGN=\"middle\" NOWRAP>\n";
+		print "     <H5>\n";
+		print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+		print "       <B>\n";
+		print "        Nombre de Usuario\n";
+		print "       </B>\n";
+		print "      </FONT>\n";
+		print "     </H5>\n";
+		print "    </TD>\n";
+		print "    <TD ALIGN=\"center\" WIDTH=150 VALIGN=\"middle\" NOWRAP>\n";
+		print "     <H5>\n";
+		print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+		print "       <B>\n";
+		print "        Apellido y Nombre\n";
+		print "       </B>\n";
+		print "      </FONT>\n";
+		print "     </H5>\n";
+		print "    </TD>\n";
+		if ($mostrar_nro_cliente eq "on")
+		{
+			print "    <TD ALIGN=\"center\" WIDTH=150 VALIGN=\"middle\" NOWRAP>\n";
+			print "     <H5>\n";
+			print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+			print "       <B>\n";
+			print "        Nro. Cliente\n";
+			print "       </B>\n";
+			print "      </FONT>\n";
+			print "     </H5>\n";
+			print "    </TD>\n";
+		}
+		if ($mostrar_sexo eq "on")
+		{
+			print "    <TD ALIGN=\"center\" WIDTH=100 VALIGN=\"middle\" NOWRAP>\n";
+			print "     <H5>\n";
+			print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+			print "       <B>\n";
+			print "        Sexo\n";
+			print "       </B>\n";
+			print "      </FONT>\n";
+			print "     </H5>\n";
+			print "    </TD>\n";
+		}
+		if ($mostrar_documento eq "on")
+		{
+			print "    <TD ALIGN=\"center\" WIDTH=100 VALIGN=\"middle\" NOWRAP>\n";
+			print "     <H5>\n";
+			print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+			print "       <B>\n";
+			print "        Documento\n";
+			print "       </B>\n";
+			print "      </FONT>\n";
+			print "     </H5>\n";
+			print "    </TD>\n";
+		}
+		if ($mostrar_direccion eq "on")
+		{
+			print "    <TD ALIGN=\"center\" WIDTH=150 VALIGN=\"middle\" NOWRAP>\n";
+			print "     <H5>\n";
+			print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+			print "       <B>\n";
+			print "        Direcci&oacute;n\n";
+			print "       </B>\n";
+			print "      </FONT>\n";
+			print "     </H5>\n";
+			print "    </TD>\n";
+		}
+		if ($mostrar_localidad eq "on")
+		{
+			print "    <TD ALIGN=\"center\" WIDTH=150 VALIGN=\"middle\" NOWRAP>\n";
+			print "     <H5>\n";
+			print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+			print "       <B>\n";
+			print "        Localidad\n";
+			print "       </B>\n";
+			print "      </FONT>\n";
+			print "     </H5>\n";
+			print "    </TD>\n";
+		}
+		if ($mostrar_codpostal eq "on")
+		{
+			print "    <TD ALIGN=\"center\" WIDTH=100 VALIGN=\"middle\" NOWRAP>\n";
+			print "     <H5>\n";
+			print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+			print "       <B>\n";
+			print "        C&oacute;digo Postal\n";
+			print "       </B>\n";
+			print "      </FONT>\n";
+			print "     </H5>\n";
+			print "    </TD>\n";
+		}
+		if ($mostrar_telefono eq "on")
+		{
+			print "    <TD ALIGN=\"center\" WIDTH=150 VALIGN=\"middle\" NOWRAP>\n";
+			print "     <H5>\n";
+			print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+			print "       <B>\n";
+			print "        Tel&eacute;fono\n";
+			print "       </B>\n";
+			print "      </FONT>\n";
+			print "     </H5>\n";
+			print "    </TD>\n";
+		}
+		if ($mostrar_tipoiva eq "on")
+		{
+			print "    <TD ALIGN=\"center\" WIDTH=150 VALIGN=\"middle\" NOWRAP>\n";
+			print "     <H5>\n";
+			print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+			print "       <B>\n";
+			print "        Tipo I.V.A.\n";
+			print "       </B>\n";
+			print "      </FONT>\n";
+			print "     </H5>\n";
+			print "    </TD>\n";
+		}
+		if ($mostrar_cuit eq "on")
+		{
+			print "    <TD ALIGN=\"center\" WIDTH=150 VALIGN=\"middle\" NOWRAP>\n";
+			print "     <H5>\n";
+			print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+			print "       <B>\n";
+			print "        CUIT\n";
+			print "       </B>\n";
+			print "      </FONT>\n";
+			print "     </H5>\n";
+			print "    </TD>\n";
+		}
+		print "    <TD ALIGN=\"center\" WIDTH=100 VALIGN=\"middle\" NOWRAP>\n";
+		print "     <H5>\n";
+		print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+		print "       <B>\n";
+		print "        Estado\n";
+		print "       </B>\n";
+		print "      </FONT>\n";
+		print "     </H5>\n";
+		print "    </TD>\n";
+		print "    <TD ALIGN=\"center\" WIDTH=100 VALIGN=\"middle\" NOWRAP>\n";
+		print "     <H5>\n";
+		print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+		print "       <B>\n";
+		print "        Acci&oacute;n al excederse\n";
+		print "        <BR>\n";
+		print "        en el tiempo de consumo\n";
+		print "       </B>\n";
+		print "      </FONT>\n";
+		print "     </H5>\n";
+		print "    </TD>\n";
+		if ($mostrar_fecha_pago eq "on")
+		{
+			print "    <TD ALIGN=\"center\" WIDTH=150 VALIGN=\"middle\" NOWRAP>\n";
+			print "     <H5>\n";
+			print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+			print "       <B>\n";
+			print "        Ultima Fecha\n";
+			print "        <BR>\n";
+			print "        de pago\n";
+			print "       </B>\n";
+			print "      </FONT>\n";
+			print "     </H5>\n";
+			print "    </TD>\n";
+		}
+		if ($mostrar_fecha_alta eq "on")
+		{
+			print "    <TD ALIGN=\"center\" WIDTH=150 VALIGN=\"middle\" NOWRAP>\n";
+			print "     <H5>\n";
+			print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+			print "       <B>\n";
+			print "        Fecha de Alta\n";
+			print "       </B>\n";
+			print "      </FONT>\n";
+			print "     </H5>\n";
+			print "    </TD>\n";
+		}
+		print "    <TD ALIGN=\"center\" WIDTH=100 VALIGN=\"middle\" NOWRAP>\n";
+		print "     <H5>\n";
+		print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+		print "       <B>\n";
+		print "        E-mails\n";
+		print "       </B>\n";
+		print "      </FONT>\n";
+		print "     </H5>\n";
+		print "    </TD>\n";
+		print "    <TD ALIGN=\"center\" WIDTH=150 VALIGN=\"middle\" NOWRAP>\n";
+		print "     <H5>\n";
+		print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+		print "       <B>\n";
+		print "        Plan\n";
+		print "       </B>\n";
+		print "      </FONT>\n";
+		print "     </H5>\n";
+		print "    </TD>\n";
+		if ($mostrar_cantidad_horas eq "on")
+		{
+			print "    <TD ALIGN=\"center\" WIDTH=50 VALIGN=\"middle\" NOWRAP>\n";
+			print "     <H5>\n";
+			print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+			print "       <B>\n";
+			print "        Cantidad\n";
+			print "        <BR>\n";
+			print "        de Horas\n";
+			print "       </B>\n";
+			print "      </FONT>\n";
+			print "     </H5>\n";
+			print "    </TD>\n";
+		}
+		print "    <TD ALIGN=\"center\" WIDTH=150 VALIGN=\"middle\" NOWRAP>\n";
+		print "     <H5>\n";
+		print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+		print "       <B>\n";
+		print "        Grupo\n";
+		print "       </B>\n";
+		print "      </FONT>\n";
+		print "     </H5>\n";
+		print "    </TD>\n";
+		print "    <TD ALIGN=\"center\" WIDTH=150 VALIGN=\"middle\" NOWRAP>\n";
+		print "     <H5>\n";
+		print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+		print "       <B>\n";
+		print "        Agente de Ventas\n";
+		print "       </B>\n";
+		print "      </FONT>\n";
+		print "     </H5>\n";
+		print "    </TD>\n";
+		print "   </TR>\n";
+	}
+
+	$background_color = "#ffebcd";
+	while (@arr = $sth->fetchrow)
+	{
+
+		if ($arr[19] eq "999")
+		{
+			$arr[19] = "Sin l&iacute;mite";
+		}
+	
+		if ($formato eq "xls")
+		{
+			@cadena = ($arr[0], $arr[1]);
+			if ($mostrar_nro_cliente eq "on")
+			{
+				@cadena = (@cadena, $arr[18]);
+			}
+			if ($mostrar_sexo eq "on")
+			{
+				@cadena = (@cadena, $arr[2]);
+			}
+			if ($mostrar_documento eq "on")
+			{
+				@cadena = (@cadena, $arr[3]);
+			}
+			if ($mostrar_direccion eq "on")
+			{
+				@cadena = (@cadena, $arr[4]);
+			}
+			if ($mostrar_localidad eq "on")
+			{
+				@cadena = (@cadena, $arr[5]);
+			}
+			if ($mostrar_codpostal eq "on")
+			{
+				@cadena = (@cadena, $arr[6]);
+			}
+			if ($mostrar_telefono eq "on")
+			{
+				@cadena = (@cadena, $arr[7]);
+			}
+			if ($mostrar_tipoiva eq "on")
+			{
+				@cadena = (@cadena, $arr[8]);
+			}
+			if ($mostrar_cuit eq "on")
+			{
+				@cadena = (@cadena, $arr[9]);
+			}
+			@cadena = (@cadena, $arr[10], $arr[11]);
+			if ($mostrar_fecha_pago eq "on")
+			{
+				@cadena = (@cadena, $arr[12]);
+			}
+			if ($mostrar_fecha_alta eq "on")
+			{
+				@cadena = (@cadena, $arr[13]);
+			}
+			@cadena = (@cadena, $arr[14], $arr[15]);
+			if ($mostrar_cantidad_horas eq "on")
+			{
+				@cadena = (@cadena, $arr[19]);
+			}
+			@cadena = (@cadena, $arr[16], $arr[17]);
+			$ss->write_row(\@cadena);
+		}
+		elsif ($formato eq "csv")
+		{
+			print "$arr[0],$arr[1]";
+			if ($mostrar_nro_cliente eq "on")
+			{
+				print ",$arr[18]";
+			}
+			if ($mostrar_sexo eq "on")
+			{
+				print ",$arr[2]";
+			}
+			if ($mostrar_documento eq "on")
+			{
+				print ",$arr[3]";
+			}
+			if ($mostrar_direccion eq "on")
+			{
+				print ",$arr[4]";
+			}
+			if ($mostrar_localidad eq "on")
+			{
+				print ",$arr[5]";
+			}
+			if ($mostrar_codpostal eq "on")
+			{
+				print ",$arr[6]";
+			}
+			if ($mostrar_telefono eq "on")
+			{
+				print ",$arr[7]";
+			}
+			if ($mostrar_tipoiva eq "on")
+			{
+				print ",$arr[8]";
+			}
+			if ($mostrar_cuit eq "on")
+			{
+				print ",$arr[9]";
+			}
+			print ",$arr[10],$arr[11]";
+			if ($mostrar_fecha_pago eq "on")
+			{
+				print ",$arr[12]";
+			}
+			if ($mostrar_fecha_alta eq "on")
+			{
+				print ",$arr[13]";
+			}
+			print ",$arr[14],$arr[15]";
+			if ($mostrar_cantidad_horas eq "on")
+			{
+				print ",$arr[19]";
+			}
+			print ",$arr[16],$arr[17]\n";
+		}
+		else
+		{
+			if ($background_color eq "#ffffff")
+			{
+				$background_color = "#ffebcd";
+			}
+			else
+			{
+				$background_color = "#ffffff";
+			}
+
+			print "   <TR BGCOLOR=\"$background_color\">\n";
+			print "    <TD ALIGN=\"left\">\n";
+			print "     <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" size=\"1\">\n";
+			print "      $arr[0]\n";
+			print "     </FONT>\n";
+			print "    </TD>\n";
+			print "    <TD ALIGN=\"left\" NOWRAP>\n";
+			print "     <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" size=\"1\">\n";
+			print "      $arr[1]\n";
+			print "     </FONT>\n";
+			print "    </TD>\n";
+			if ($mostrar_nro_cliente eq "on")
+			{
+				print "    <TD ALIGN=\"center\" NOWRAP>\n";
+				print "     <font face=\"Courier, Courier New, Monaco\" size=\"2\">\n";
+				print "      $arr[18]\n";
+				print "     </FONT>\n";
+				print "    </TD>\n";
+			}
+			if ($mostrar_sexo eq "on")
+			{
+				print "    <TD ALIGN=\"center\" NOWRAP>\n";
+				print "     <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" size=\"1\">\n";
+				print "      $arr[2]\n";
+				print "     </FONT>\n";
+				print "    </TD>\n";
+			}
+			if ($mostrar_documento eq "on")
+			{
+				print "    <TD ALIGN=\"left\">\n";
+				print "     <font face=\"Courier, Courier New, Monaco\" size=\"2\">\n";
+				print "      $arr[3]\n";
+				print "     </FONT>\n";
+				print "    </TD>\n";
+			}
+			if ($mostrar_direccion eq "on")
+			{
+				print "    <TD ALIGN=\"left\">\n";
+				print "     <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" size=\"1\">\n";
+				print "      $arr[4]\n";
+				print "     </FONT>\n";
+				print "    </TD>\n";
+			}
+			if ($mostrar_localidad eq "on")
+			{
+				print "    <TD ALIGN=\"left\">\n";
+				print "     <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" size=\"1\">\n";
+				print "      $arr[5]\n";
+				print "     </FONT>\n";
+				print "    </TD>\n";
+			}
+			if ($mostrar_codpostal eq "on")
+			{
+				print "    <TD ALIGN=\"left\">\n";
+				print "     <font face=\"Courier, Courier New, Monaco\" size=\"2\">\n";
+				print "      $arr[6]\n";
+				print "     </FONT>\n";
+				print "    </TD>\n";
+			}
+			if ($mostrar_telefono eq "on")
+			{
+				print "    <TD ALIGN=\"left\">\n";
+				print "     <font face=\"Courier, Courier New, Monaco\" size=\"2\">\n";
+				print "      $arr[7]\n";
+				print "     </FONT>\n";
+				print "    </TD>\n";
+			}
+			if ($mostrar_tipoiva eq "on")
+			{
+				print "    <TD ALIGN=\"left\">\n";
+				print "     <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" size=\"1\">\n";
+				print "      $arr[8]\n";
+				print "     </FONT>\n";
+				print "    </TD>\n";
+			}
+			if ($mostrar_cuit eq "on")
+			{
+				print "    <TD ALIGN=\"left\">\n";
+				print "     <font face=\"Courier, Courier New, Monaco\" size=\"2\">\n";
+				print "      $arr[9]\n";
+				print "     </FONT>\n";
+				print "    </TD>\n";
+			}
+			print "    <TD ALIGN=\"left\">\n";
+			print "     <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" size=\"1\">\n";
+			print "      $arr[10]\n";
+			print "     </FONT>\n";
+			print "    </TD>\n";
+			print "    <TD ALIGN=\"left\">\n";
+			print "     <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" size=\"1\">\n";
+			print "      $arr[11]\n";
+			print "     </FONT>\n";
+			print "    </TD>\n";
+			if ($mostrar_fecha_pago eq "on")
+			{
+				print "    <TD ALIGN=\"left\">\n";
+				print "     <font face=\"Courier, Courier New, Monaco\" size=\"2\">\n";
+				print "      $arr[12]\n";
+				print "     </FONT>\n";
+				print "    </TD>\n";
+			}
+			if ($mostrar_fecha_alta eq "on")
+			{
+				print "    <TD ALIGN=\"left\">\n";
+				print "     <font face=\"Courier, Courier New, Monaco\" size=\"2\">\n";
+				print "      $arr[13]\n";
+				print "     </FONT>\n";
+				print "    </TD>\n";
+			}
+			$arr[14] =~ s/,/<BR>/g;
+			print "    <TD ALIGN=\"left\">\n";
+			print "     <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" size=\"1\">\n";
+			print "      $arr[14]\n";
+			print "     </FONT>\n";
+			print "    </TD>\n";
+			print "    <TD ALIGN=\"left\">\n";
+			print "     <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" size=\"1\">\n";
+			print "      $arr[15]\n";
+			print "     </FONT>\n";
+			print "    </TD>\n";
+			if ($mostrar_cantidad_horas eq "on")
+			{
+				print "    <TD ALIGN=\"left\">\n";
+				print "     <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" size=\"1\">\n";
+				print "      $arr[19]\n";
+				print "     </FONT>\n";
+				print "    </TD>\n";
+			}
+			print "    <TD ALIGN=\"left\">\n";
+			print "     <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" size=\"1\">\n";
+			print "      $arr[16]\n";
+			print "     </FONT>\n";
+			print "    </TD>\n";
+			print "    <TD ALIGN=\"left\">\n";
+			print "     <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" size=\"1\">\n";
+			print "      $arr[17]\n";
+			print "     </FONT>\n";
+			print "    </TD>\n";
+			print "   </TR>\n";
+		}
+	}
+
+	if ($formato eq "csv")
+	{
+		exit(0);
+	}
+
+	if ($formato eq "xls")
+	{
+		print "Content-Type: application/excel\n\n";
+		print $ss->data;
+	}
+	else
+	{
+		if ($background_color eq "#ffffff")
+		{
+			$background_color = "#ffebcd";
+		}
+		else
+		{
+			$background_color = "#ffffff";
+		}
+		print "  </TABLE>\n";
+		print "  <BR>\n";
+	}
+
+	if ($formato eq "html")
+	{
+
+
+		print "  <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" size=\"4\">\n";
+		print "   <DIV ALIGN=\"left\">\n";
+		print "    <A HREF=\"mailgrupo.html?wwwuser=$wwwuser&wwwpass=$wwwpass&grupo=$grupo&agente=$agente&plan=$plan&localidad=$localidad&activo=$activo&inactivo=$inactivo&facturar_excedente=$facturar_excedente&corte_de_servicio=$corte_de_servicio\">\n";
+		print "     <B>\n";
+		print "      Mail Administrativo al Grupo\n";
+		print "     </B>\n";
+		print "    </A>\n";
+		print "   </DIV>\n";
+		print "  </font>\n";
+		print "  <HR>\n";
+		&menu_listado($wwwuser, $wwwpass, $grupo_original, $agente_original, $plan_original, $activo, $inactivo, $facturar_excedente, $corte_de_servicio, $localidad_original, $mostrar_nro_cliente, $mostrar_sexo, $mostrar_documento, $mostrar_direccion, $mostrar_localidad, $mostrar_codpostal, $mostrar_telefono, $mostrar_tipoiva, $mostrar_cuit, $mostrar_fecha_pago, $mostrar_fecha_alta, $mostrar_cantidad_horas);
+	}
+
+	if ($formato eq "pdf")
+	{
+		print " </BODY>\n";
+		print "</HTML>\n";
+		close(FILETEMP); 
+		select(STDOUT); 
+		$| = 1;
+		print "Content-Type: application/pdf\n\n";
+		system "/usr/bin/htmldoc --format pdf14 --quiet --size A4 --landscape --webpage /tmp/$$.html";
+		exit(0);
+	}
+}
+else
+{
+	print header();
+	&head_html("", "Radius - Administraci&oacute;n de Usuarios - Consulta de Consumos Totales", "#ffffff");
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/radadm/index.html");
+exit(0);

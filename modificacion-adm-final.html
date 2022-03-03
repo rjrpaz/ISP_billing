@@ -1,0 +1,58 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+
+$url = "$server/radadm/modificacion-adm-realizacion.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Administraci&oacute;n de Operadores - Modificaci&oacute;n", "#ffffff");
+
+if ($http_referer =~ m/$url/)
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $nombre = param('nombre');
+	my $usuario = param('usuario');
+	my $password = param('password');
+	my $nivel = param('nivel');
+	my $grupo = param('grupo');
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	if ((&obtener_nivel($wwwuser)) ne "Acceso Total")
+	{
+		&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+	}
+
+	if ($password !~ m/(.{$tamanio_minimo_contrasenia})/)
+	{
+		&return_error_mysql ("Error en el proceso", "Es conveniente que la contrase&ntilde;a tenga al menos $tamanio_minimo_contrasenia caracteres de largo", "")
+	}
+
+	&alta_usuarios($usuario, $password, $nombre, $nivel, $grupo);
+
+	&insertar_log ($wwwuser, "Modificacion de Operadores", "Nombre: $nombre, Usuario: $usuario, Nivel: $nivel, Grupo: $grupo");
+
+print <<body;
+
+  <DIV ALIGN="center">
+   <B>
+    <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+     Hecho ...
+    </FONT>
+   </B>
+  </DIV>
+
+body
+}
+else
+{
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/radadm/index.html");
+exit(0);

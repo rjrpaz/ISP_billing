@@ -1,0 +1,219 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+
+$url = "$server/radadm/modificacion-plan.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Definici&oacute;n de Planes - Modificaci&oacute;n", "#ffffff");
+
+if ($http_referer =~ m/$url/)
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $modificar = param('modificar');
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	if ((&obtener_nivel($wwwuser)) ne "Acceso Total")
+	{
+		&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+	}
+
+	if ($modificar ne "")
+	{
+		$dbh = Mysql->connect($host, $database, $dbuser, $dbpass);
+		$errmsg = Mysql->errmsg();
+		if ($errmsg ne "")
+		{
+			&return_error_mysql ("Error en el proceso", "Existi&oacute; al intentarse la conexi&oacute;n a la Base de Datos.<BR>Consulte al Administrador de la misma", $errmsg);
+		}
+
+		$sql_statement = "SELECT Primer_Vencimiento, Segundo_Vencimiento, Tercer_Vencimiento, Cantidad_Accesos_Simultaneos, Cantidad_Horas, Cantidad_E_Mail, Costo_Tiempo_Excedente, Navegacion, Hosting FROM planes WHERE (Nombre like '".$modificar."')";
+
+		$sth = $dbh->query($sql_statement)
+		or die &return_error_mysql ("Error en el proceso", "Hubo un error en la consulta a la Base de Datos.<BR>Consulte al Administrador de la misma", $dbh->errmsg());
+
+		@arr = $sth->fetchrow;
+		if ($arr[1] eq "0.00")
+		{
+			$arr[1] = "";
+		}
+		if ($arr[2] eq "0.00")
+		{
+			$arr[2] = "";
+		}
+		if ($arr[4] eq "999")
+		{
+			$arr[4] = "Sin l&iacute;mite";
+		}
+
+		print <<body_modificacion_1;
+  <FORM ACTION="modificacion-plan-final.html" METHOD="post\">
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <INPUT TYPE="hidden" NAME="nombre" VALUE="$modificar">
+   <TABLE COOL BORDER="1" CELLPADDING="0" CELLSPACING="0" ALIGN="center">
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="4">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+       Plan
+       &nbsp;
+       <B>
+        $modificar : 
+       </B>
+       &nbsp;
+       Modifique los campos que asi lo requieran
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left" HEIGHT="10%">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Montos:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center" HEIGHT="30%">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       1er. Vencimiento:
+       <BR>
+       (necesario)
+      </FONT>
+      <BR>
+      <INPUT TYPE="text" NAME="primer_vencimiento" VALUE="$arr[0]" SIZE="10">
+     </TD>
+     <TD ALIGN="center" HEIGHT="30%">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       2do. Vencimiento:
+       <BR>
+       (opcional)
+      </FONT>
+      <BR>
+      <INPUT TYPE="text" NAME="segundo_vencimiento" VALUE="$arr[1]" SIZE="10">
+     </TD>
+     <TD ALIGN="center" HEIGHT="30%">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       3er. Vencimiento:
+       <BR>
+       (opcional)
+      </FONT>
+      <BR>
+      <INPUT TYPE="text" NAME="tercer_vencimiento" VALUE="$arr[2]" SIZE="10">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left" ROWSPAN="2">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Caracter&iacute;sticas
+        <BR>
+        Generales:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Cantidad de
+       <BR>
+       Accesos Simult&aacute;neos:
+       <BR>
+       (valor por defecto: 1)
+      </FONT>
+      <BR>
+      <INPUT TYPE="text" NAME="cantidad_accesos_simultaneos" VALUE="$arr[3]" SIZE="10">
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Cantidad de Horas:
+       <BR>
+       (valor por defecto: sin l&iacute;mite)
+      </FONT>
+      <BR>
+      <INPUT TYPE="text" NAME="cantidad_horas" VALUE="$arr[4]" SIZE="10">
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Cantidad de direcciones
+       <BR>
+       de correo electr&oacute;nico:
+       <BR>
+       (valor por defecto: 1)
+      </FONT>
+      <BR>
+      <INPUT TYPE="text" NAME="cantidad_e_mail" VALUE="$arr[5]" SIZE="10">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Costo del tiempo excedente:
+      </FONT>
+      <BR>
+      <INPUT TYPE="text" NAME="costo_tiempo_excedente" VALUE="$arr[6]" SIZE="10">
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Incluye Navegaci&oacute;n:
+      </FONT>
+      <BR>
+body_modificacion_1
+		print "      <INPUT TYPE=\"checkbox\" NAME=\"incluye_navegacion\"";
+		if ($arr[7] eq "Si")
+		{
+			print " CHECKED";
+		}
+		print ">\n";
+		print "     </TD>\n";
+		print "     <TD ALIGN=\"center\">\n";
+		print "      <FONT FACE=\"Arial,Helvetica,Geneva,Swiss,SunSans-Regular\" COLOR=\"black\">\n";
+		print "       Incluye Hosting:\n";
+		print "      </FONT>\n";
+		print "      <BR>\n";
+		print "      <INPUT TYPE=\"checkbox\" NAME=\"incluye_hosting\"";
+		if ($arr[8] eq "Si")
+		{
+			print " CHECKED";
+		}
+		print ">\n";
+		print <<body_modificacion_2;
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="4" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="Confirmar">
+        &nbsp; &nbsp; &nbsp;
+        <INPUT TYPE="reset" VALUE="Limpiar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body_modificacion_2
+	}
+	else
+	{
+		&return_error_mysql ("Error en el proceso", "No se ingreso un elemento para modificar", $dbh->errmsg());
+	}
+}
+else
+{
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/radadm/index.html");
+exit(0);

@@ -1,0 +1,119 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+
+$url = "$server/radadm/abm.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Administraci&oacute;n de Usuarios - Acceso al Mail de un usuario", "#ffffff");
+
+if ($http_referer =~ m/$url/)
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $search = param('search');
+	my $nivel = "";
+	my @e_mails = ();
+	my $e_mails = "";
+	my $e_mails_M = "";
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	$nivel = &obtener_nivel($wwwuser);
+	if ($nivel eq "Tareas de Consulta")
+	{
+		&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+	}
+
+	$dbh = Mysql->connect($host, $database, $dbuser, $dbpass);
+	if ($search ne "")
+	{
+		my $search_M = $search;
+		$search_M =~ tr/[a-z]/[A-Z]/;
+
+		$sql_statement = "SELECT E_mails FROM personaldata WHERE (UPPER(E_mails) like '%".$search_M."%')";
+
+		$sth = $dbh->query($sql_statement)
+		or die &return_error_mysql ("Error en el proceso", "Hubo un error en la consulta a la Base de Datos.<BR>Consulte al Administrador de la misma", $dbh->errmsg());
+		
+		if ($sth->numrows == 0)
+		{
+			&return_error_mysql ("Error en el proceso", "No se encontraron registros que respondan al patr&oacute;n de b&uacute;squeda", $dbh->errmsg());
+		}
+		else
+		{
+
+			print <<body;
+  <FORM ACTION="maildir-consulta.html" METHOD="post\">
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <TABLE COOL BORDER="1" CELLPADDING="0" CELLSPACING="0" ALIGN="center">
+    <TR>
+     <TD ALIGN="left" COLSPAN="2">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+        Indique el Registro cuyo mail va a ser CONSULTADO
+        <BR>
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+body
+			while ($arr = $sth->fetchrow)
+			{
+				@e_mails = split /,/, $arr;
+
+				foreach $e_mails (@e_mails)
+				{
+					$e_mails_M = $e_mails;
+					$e_mails_M =~ tr/[a-z]/[A-Z]/;
+
+					if ($e_mails_M =~ /$search_M/)
+					{
+						print "    <TR>\n";
+						print "     <TD ALIGN=\"left\">\n";
+						print "      <INPUT TYPE=\"radio\" NAME=\"consultar\" VALUE=\"$e_mails\">\n";
+						print "     </TD>\n";
+						print "     <TD ALIGN=\"left\">\n";
+						print "      <FONT FACE=\"Arial,Helvetica,Geneva,Swiss,SunSans-Regular\" COLOR=\"black\">\n";
+						print "       $e_mails\n";
+						print "      </FONT>\n";
+						print "     </TD>\n";
+						print "    </TR>\n";
+					}
+				}
+			}
+
+			print <<body;
+    <TR>
+     <TD ALIGN="center" COLSPAN="2" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="Confirmar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body
+		}
+	}
+	else
+	{
+		&return_error_mysql ("Error en el proceso", "Se debe ingresar alg&uacute;n patr&oacute;n de b&uacute;squeda", $dbh->errmsg());
+	}
+}
+else
+{
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/radadm/index.html");
+exit(0);

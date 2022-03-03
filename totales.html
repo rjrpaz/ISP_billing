@@ -1,0 +1,311 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+use Spreadsheet::WriteExcel::Simple;
+
+$url = "$server/radadm/abm.html";
+$url_1 = "$server/radadm/totales.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+my $errmsg = "";
+my $ss = Spreadsheet::WriteExcel::Simple->new;
+
+if (($http_referer =~ m/$url/) || ($http_referer =~ m/$url_1/))
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $formato = param('formato');
+	my $dia_inicial = param('dia_inicial');
+	my $mes_inicial = param('mes_inicial');
+	my $anio_inicial = param('anio_inicial');
+	my $dia_final = param('dia_final');
+	my $mes_final = param('mes_final');
+	my $anio_final = param('anio_final');
+	my $nivel = "";
+
+	if ($formato eq "html")
+	{
+		print header();
+		&head_html("", "Radius - Administraci&oacute;n de Usuarios - Consulta de Consumos Totales", "#ffffff");
+	}
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	$nivel = &obtener_nivel($wwwuser);
+
+	my $fecha_inicial = $anio_inicial."-".$mes_inicial."-".$dia_inicial." 00:00:00";
+	my $fecha_final = $anio_final."-".$mes_final."-".$dia_final." 23:59:59";
+
+	$dbh = Mysql->connect($host, $database, $dbuser, $dbpass);
+	$errmsg = Mysql->errmsg();
+	if ($errmsg ne "")
+	{
+		&return_error_mysql ("Error en el proceso", "No se pudo establecer conexi&oacute;n con la Base de Datos.<BR>Consulte al Administrador de la misma.", $errmsg);
+	}
+
+	if ($nivel eq "Acceso Total")
+	{
+		$sql_statement = "SELECT radacct.UserName, SUM(radacct.AcctSessionTime), SUM(radacct.AcctOutputOctets), SUM(radacct.AcctInputOctets), personaldata.PersonalDataID, planes.Cantidad_Horas FROM radacct LEFT JOIN personaldata ON (radacct.UserName = personaldata.UserName) LEFT JOIN planes ON (personaldata.Plan_ID=planes.ID) WHERE (planes.Cantidad_Accesos_Simultaneos != 0) AND (radacct.AcctStopTime BETWEEN '".$fecha_inicial."' AND '".$fecha_final."') GROUP BY radacct.UserName ORDER BY radacct.UserName";
+	}
+	elsif ($nivel eq "Tareas Operativas")
+	{
+		$sql_statement = "SELECT radacct.UserName, SUM(radacct.AcctSessionTime), SUM(radacct.AcctOutputOctets), SUM(radacct.AcctInputOctets), personaldata.PersonalDataID, planes.Cantidad_Horas FROM radacct LEFT JOIN personaldata ON (radacct.UserName = personaldata.UserName) LEFT JOIN planes ON (personaldata.Plan_ID=planes.ID) LEFT JOIN usuarios ON (personaldata.Grupo_ID = usuarios.Grupo_ID) WHERE usuarios.Username like '".$wwwuser."' AND (planes.Cantidad_Accesos_Simultaneos != 0) AND (radacct.AcctStopTime BETWEEN '".$fecha_inicial."' AND '".$fecha_final."') GROUP BY radacct.UserName ORDER BY radacct.UserName";
+	}
+	else
+	{
+		if (&usuario_tiene_agente_asociado($wwwuser))
+		{
+			$sql_statement = "SELECT radacct.UserName, SUM(radacct.AcctSessionTime), SUM(radacct.AcctOutputOctets), SUM(radacct.AcctInputOctets), personaldata.PersonalDataID, planes.Cantidad_Horas FROM radacct LEFT JOIN personaldata ON (radacct.UserName = personaldata.UserName) LEFT JOIN planes ON (personaldata.Plan_ID=planes.ID) LEFT JOIN usuarios ON (personaldata.Grupo_ID = usuarios.Grupo_ID) LEFT JOIN agentes ON (agentes.ID = personaldata.Agente_ID) WHERE usuarios.Username like '".$wwwuser."' AND (agentes.Usuario_ID = usuarios.ID) AND (planes.Cantidad_Accesos_Simultaneos != 0) AND (radacct.AcctStopTime BETWEEN '".$fecha_inicial."' AND '".$fecha_final."') GROUP BY radacct.UserName ORDER BY radacct.UserName";
+		}
+		else
+		{
+			$sql_statement = "SELECT radacct.UserName, SUM(radacct.AcctSessionTime), SUM(radacct.AcctOutputOctets), SUM(radacct.AcctInputOctets), personaldata.PersonalDataID, planes.Cantidad_Horas FROM radacct LEFT JOIN personaldata ON (radacct.UserName = personaldata.UserName) LEFT JOIN planes ON (personaldata.Plan_ID=planes.ID) LEFT JOIN usuarios ON (personaldata.Grupo_ID = usuarios.Grupo_ID) WHERE usuarios.Username like '".$wwwuser."' AND (planes.Cantidad_Accesos_Simultaneos != 0) AND (radacct.AcctStopTime BETWEEN '".$fecha_inicial."' AND '".$fecha_final."') GROUP BY radacct.UserName ORDER BY radacct.UserName";
+		}
+	}
+
+	$sth = $dbh->query($sql_statement)
+	or die &return_error_mysql ("Error en el proceso", "Hubo un error en la consulta a la Base de Datos.<BR>Consulte al Administrador de la misma", $dbh->errmsg());
+		
+	if ($formato eq "pdf")
+	{
+		open (FILETEMP, ">/tmp/$$.html");
+		select FILETEMP; 
+		print <<Eof_Head;
+<HTML>
+ <HEAD>
+  <TITLE>
+   Radius - Administraci&oacute;n de Usuarios - Consulta de Consumos Totales
+  </TITLE>
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+Eof_Head
+	}
+
+	if ($formato eq "html")
+	{
+		print "  <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" size=\"4\">\n";
+		print "   <DIV ALIGN=\"right\">\n";
+		print "    <A HREF=\"totales.html?wwwuser=$wwwuser&wwwpass=$wwwpass&dia_inicial=$dia_inicial&mes_inicial=$mes_inicial&anio_inicial=$anio_inicial&dia_final=$dia_final&mes_final=$mes_final&anio_final=$anio_final&formato=xls\">\n";
+		print "     <B>\n";
+		print "      .xls\n";
+		print "     </B>\n";
+		print "    </A>\n";
+		print "    &nbsp;\n";
+		print "    <A HREF=\"totales.html?wwwuser=$wwwuser&wwwpass=$wwwpass&dia_inicial=$dia_inicial&mes_inicial=$mes_inicial&anio_inicial=$anio_inicial&dia_final=$dia_final&mes_final=$mes_final&anio_final=$anio_final&formato=pdf\">\n";
+		print "     <B>\n";
+		print "      .pdf\n";
+		print "     </B>\n";
+		print "    </A>\n";
+		print "   </DIV>\n";
+		print "  </FONT>\n";
+		print "  <BR>\n";
+	}
+
+	if ($formato eq "xls")
+	{
+		@titulos = ("Nombre de Usuario", "Apellido y Nombre", "Nro. de Cliente", "Cant. Horas", "Tiempo conectado", "Bytes entrantes transferidos", "Bytes salientes transferidos");
+		$ss->write_row(\@titulos);
+	}
+	else
+	{
+		$nombre = &obtener_nombre($arr[0]);
+		print "  <TABLE bgcolor=\"#ffffff\" BORDER=\"0\" CELLPADDING=\"0\" CELLSPACING=\"0\" ALIGN=\"center\">\n";
+		print "   <TR>\n";
+		print "    <TD COLSPAN=\"5\" ALIGN=\"center\">\n";
+		print "     <CAPTION>\n";
+		print "      <H4>\n";
+		print "       <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\">\n";
+		print "        Consumo correspondiente al periodo\n";
+		print "        &nbsp; \n";
+		print "        <B>\n";
+		print "         $dia_inicial/$mes_inicial/$anio_inicial\n";
+		print "         &nbsp; \n";
+		print "         al\n";
+		print "         &nbsp; \n";
+		print "         $dia_final/$mes_final/$anio_final\n";
+		print "        </B>\n";
+		print "       </font>\n";
+		print "      </H4>\n";
+		print "     </CAPTION>\n";
+		print "    </TD>\n";
+		print "   </TR>\n";
+
+		print "   <TR BGCOLOR=\"#daa520\" HEIGHT=\"16\">\n";
+		print "    <TD ALIGN=\"center\" WIDTH=100 VALIGN=\"middle\" NOWRAP>\n";
+		print "     <H5>\n";
+		print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+		print "       <B>\n";
+		print "        Nombre de Usuario\n";
+		print "       </B>\n";
+		print "      </FONT>\n";
+		print "     </H5>\n";
+		print "    </TD>\n";
+		print "    <TD ALIGN=\"center\" WIDTH=140 VALIGN=\"middle\" NOWRAP>\n";
+		print "     <H5>\n";
+		print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+		print "       <B>\n";
+		print "        Apellido y Nombre\n";
+		print "       </B>\n";
+		print "      </FONT>\n";
+		print "     </H5>\n";
+		print "    </TD>\n";
+		print "    <TD ALIGN=\"center\" WIDTH=100 VALIGN=\"middle\" NOWRAP>\n";
+		print "     <H5>\n";
+		print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+		print "       <B>\n";
+		print "        Nro. de Cliente\n";
+		print "       </B>\n";
+		print "      </FONT>\n";
+		print "     </H5>\n";
+		print "    </TD>\n";
+		print "    <TD ALIGN=\"center\" WIDTH=50 VALIGN=\"middle\" NOWRAP>\n";
+		print "     <H5>\n";
+		print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+		print "       <B>\n";
+		print "        Cantidad\n";
+		print "        <BR>\n";
+		print "        de Horas\n";
+		print "        <BR>\n";
+		print "        del Plan\n";
+		print "       </B>\n";
+		print "      </FONT>\n";
+		print "     </H5>\n";
+		print "    </TD>\n";
+		print "    <TD ALIGN=\"center\" WIDTH=100 VALIGN=\"middle\" NOWRAP>\n";
+		print "     <H5>\n";
+		print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+		print "       <B>\n";
+		print "        Tiempo conectado\n";
+		print "       </B>\n";
+		print "      </FONT>\n";
+		print "     </H5>\n";
+		print "    </TD>\n";
+		print "    <TD ALIGN=\"center\" WIDTH=150 VALIGN=\"middle\" NOWRAP>\n";
+		print "     <H5>\n";
+		print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+		print "       <B>\n";
+		print "         Bytes entrantes transferidos\n";
+		print "       </B>\n";
+		print "      </FONT>\n";
+		print "     </H5>\n";
+		print "    </TD>\n";
+		print "    <TD ALIGN=\"center\" WIDTH=150 VALIGN=\"middle\" NOWRAP>\n";
+		print "     <H5>\n";
+		print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+		print "       <B>\n";
+		print "         Bytes salientes transferidos\n";
+		print "       </B>\n";
+		print "      </FONT>\n";
+		print "     </H5>\n";
+		print "    </TD>\n";
+		print "   </TR>\n";
+	}
+
+	$background_color = "#ffebcd";
+	while (@arr = $sth->fetchrow)
+	{
+		if ($arr[5] eq "999")
+		{
+			$arr[5] = "Sin l&iacute;mite";
+		}
+	
+		$nombre = &obtener_nombre($arr[0]);
+		$arr[1] = &segundos2hora($arr[1]);
+		if ($formato eq "xls")
+		{
+			@cadena = ($arr[0], $nombre, $arr[4], $arr[5], $arr[1], $arr[2], $arr[3]);
+			$ss->write_row(\@cadena);
+		}
+		else
+		{
+			if ($background_color eq "#ffffff")
+			{
+				$background_color = "#ffebcd";
+			}
+			else
+			{
+				$background_color = "#ffffff";
+			}
+
+			print "   <TR BGCOLOR=\"$background_color\">\n";
+			print "    <TD ALIGN=\"left\" WIDTH=100>\n";
+			print "     <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" size=\"1\">\n";
+			print "      $arr[0]\n";
+			print "     </FONT>\n";
+			print "    </TD>\n";
+			print "    <TD ALIGN=\"left\" WIDTH=140 NOWRAP>\n";
+			print "     <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" size=\"1\">\n";
+			print "      $nombre\n";
+			print "     </FONT>\n";
+			print "    </TD>\n";
+			print "    <TD ALIGN=\"right\" WIDTH=100 NOWRAP>\n";
+			print "     <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" size=\"1\">\n";
+			print "      $arr[4]\n";
+			print "     </FONT>\n";
+			print "    </TD>\n";
+			print "    <TD ALIGN=\"right\" WIDTH=50 NOWRAP>\n";
+			print "     <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" size=\"1\">\n";
+			print "      $arr[5]\n";
+			print "     </FONT>\n";
+			print "    </TD>\n";
+			print "    <TD ALIGN=\"right\" WIDTH=100 NOWRAP>\n";
+			print "     <font face=\"Courier, Courier New, Monaco\" size=\"2\">\n";
+			print "      $arr[1]\n";
+			print "     </FONT>\n";
+			print "    </TD>\n";
+			print "    <TD ALIGN=\"right\" WIDTH=150 NOWRAP>\n";
+			print "     <font face=\"Courier, Courier New, Monaco\" size=\"2\">\n";
+			print "      $arr[2]\n";
+			print "     </FONT>\n";
+			print "    </TD>\n";
+			print "    <TD ALIGN=\"right\" WIDTH=150>\n";
+			print "     <font face=\"Courier, Courier New, Monaco\" size=\"2\">\n";
+			print "      $arr[3]\n";
+			print "     </FONT>\n";
+			print "    </TD>\n";
+			print "   </TR>\n";
+		}
+	}
+
+	if ($formato eq "xls")
+	{
+		print "Content-Type: application/excel\n\n";
+		print $ss->data;
+	}
+	else
+	{
+		if ($background_color eq "#ffffff")
+		{
+			$background_color = "#ffebcd";
+		}
+		else
+		{
+			$background_color = "#ffffff";
+		}
+		print "  </TABLE>\n";
+		print "  <BR>\n";
+	}
+
+	if ($formato eq "pdf")
+	{
+		print " </BODY>\n";
+		print "</HTML>\n";
+		close(FILETEMP); 
+		select(STDOUT); 
+		$| = 1;
+		print "Content-Type: application/pdf\n\n";
+		system "/usr/bin/htmldoc --format pdf14 --quiet --size A4 --landscape --webpage /tmp/$$.html";
+		exit(0);
+	}
+}
+else
+{
+	print header();
+	&head_html("", "Radius - Administraci&oacute;n de Usuarios - Consulta de Consumos Totales", "#ffffff");
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/radadm/index.html");
+exit(0);

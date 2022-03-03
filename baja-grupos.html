@@ -1,0 +1,165 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+
+$url = "$server/radadm/abm-grupos.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Definici&oacute;n de Grupos de Usuarios - Baja", "#ffffff");
+
+if ($http_referer =~ m/$url/)
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $search = param('search');
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	if ((&obtener_nivel($wwwuser)) ne "Acceso Total")
+	{
+		&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+	}
+
+	$dbh = Mysql->connect($host, $database, $dbuser, $dbpass);
+	if ($search ne "")
+	{
+		my $search_M = $search;
+		$search_M =~ tr/[a-z]/[A-Z]/;
+
+		$sql_statement = "SELECT Nombre, Dominio, Descripcion FROM grupos WHERE ((UPPER(Nombre) like '%".$search_M."%') OR (UPPER(Dominio) like '%".$search_M."%') OR (UPPER(Descripcion) like '%".$search_M."%'))";
+
+		$sth = $dbh->query($sql_statement)
+		or die &return_error_mysql ("Error en el proceso", "Hubo un error en la consulta a la Base de Datos.<BR>Consulte al Administrador de la misma", $dbh->errmsg());
+		
+		if ($sth->numrows == 0)
+		{
+			&return_error_mysql ("Error en el proceso", "No se encontraron registros que respondan al patr&oacute;n de b&uacute;squeda", $dbh->errmsg());
+		}
+		else
+		{
+
+			print <<body_baja_1;
+  <FORM ACTION="baja-grupos-confirmacion.html" METHOD="post\">
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <TABLE COOL BORDER="1" CELLPADDING="0" CELLSPACING="0" ALIGN="center">
+    <TR>
+     <TD ALIGN="left" COLSPAN="2">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+        Indique el Registro que va a ser ELIMINADO
+        <BR>
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+body_baja_1
+			while (@arr = $sth->fetchrow)
+			{
+				print "    <TR>\n";
+				print "     <TD ALIGN=\"left\">\n";
+				print "      <INPUT TYPE=\"radio\" NAME=\"eliminar\" VALUE=\"$arr[0]\"";
+				if ($sth->numrows == 1)
+				{
+					print " CHECKED";
+				}
+				print ">\n";
+				print "     </TD>\n";
+
+				print "     <TD ALIGN=\"left\">\n";
+				print <<body_baja_2;
+
+      <TABLE COOL BORDER=\"1\" CELLPADDING="0" CELLSPACING="0" ALIGN="center" WIDTH="100%">
+       <TR>
+        <TD ALIGN="left" COLSPAN="2">
+         <B>
+          <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+           Datos del Grupo
+          </FONT>
+         </B>
+        </TD>
+       </TR>
+
+       <TR>
+        <TD ALIGN="left">
+         <B>
+          <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+           Nombre:
+          </FONT>
+         </B>
+        </TD>
+        <TD ALIGN="left">
+         <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+          $arr[0]
+         </FONT>
+        </TD>
+       </TR>
+
+       <TR>
+        <TD ALIGN="left">
+         <B>
+          <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+           Dominio:
+          </FONT>
+         </B>
+        </TD>
+        <TD ALIGN="left">
+         <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+          $arr[1]
+         </FONT>
+        </TD>
+       </TR>
+
+       <TR>
+        <TD ALIGN="left">
+         <B>
+          <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+           Descripci&oacute;n:
+          </FONT>
+         </B>
+        </TD>
+        <TD ALIGN="left">
+         <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+          $arr[2]
+         </FONT>
+        </TD>
+       </TR>
+
+      </TABLE>
+     </TD>
+body_baja_2
+			}
+
+			print <<body_baja_3;
+    <TR>
+     <TD ALIGN="center" COLSPAN="2" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="Confirmar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body_baja_3
+		}
+	}
+	else
+	{
+		&return_error_mysql ("Error en el proceso", "Se debe ingresar alg&uacute;n patr&oacute;n de b&uacute;squeda", $dbh->errmsg());
+	}
+}
+else
+{
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/radadm/index.html");
+exit(0);

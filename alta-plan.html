@@ -1,0 +1,283 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+
+$url = "$server/radadm/abm-planes.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Definici&oacute;n de Planes - Creaci&oacute;n", "#ffffff");
+
+if ($http_referer =~ m/$url/)
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $nombre = param('nombre');
+	my $primer_vencimiento = param('primer_vencimiento');
+	my $segundo_vencimiento = param('segundo_vencimiento');
+	my $tercer_vencimiento = param('tercer_vencimiento');
+	my $cantidad_accesos_simultaneos = param('cantidad_accesos_simultaneos');
+	my $cantidad_horas = param('cantidad_horas');
+	my $cantidad_e_mail = param('cantidad_e_mail');
+	my $costo_tiempo_excedente = param('costo_tiempo_excedente');
+	my $incluye_navegacion = param('incluye_navegacion');
+	my $incluye_hosting = param('incluye_hosting');
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	if ((&obtener_nivel($wwwuser)) ne "Acceso Total")
+	{
+		&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+	}
+
+	###############################################
+	# Chequeo si ya existe un plan con ese nombre #
+	###############################################
+	if (&plan_existente($nombre))
+	{
+		&return_error_mysql ("Error en el proceso", "El nombre de plan <b> $nombre </b> ya est&aacute; siendo utilizado", "")
+	}
+
+	#####################################
+	# Chequeo de las variables del FORM #
+	#####################################
+	if ($nombre eq "")
+	{
+		&return_error_mysql ("Error en el proceso", "El nombre del plan es obligatorio", "")
+	}
+
+	$primer_vencimiento =~ s/\,/\./g;
+	if (($primer_vencimiento eq "") || ($primer_vencimiento !~ /^\d+\.?\d*?$/))
+	{
+		&return_error_mysql ("Error en el proceso", "El primer vencimiento debe existir, y debe ser un valor num&eacute;rico", "")
+	}
+
+	$segundo_vencimiento =~ s/\,/\./g;
+	if (($segundo_vencimiento ne "") && ($segundo_vencimiento !~ /^\d+\.?\d*?$/))
+	{
+		&return_error_mysql ("Error en el proceso", "El segundo vencimiento, si existe, debe ser un valor num&eacute;rico", "")
+	}
+
+	$tercer_vencimiento =~ s/\,/\./g;
+	if (($tercer_vencimiento ne "") && ($tercer_vencimiento !~ /^\d+\.?\d*?$/))
+	{
+		&return_error_mysql ("Error en el proceso", "El tercer vencimiento, si existe, debe ser un valor num&eacute;rico", "")
+	}
+
+	if ($cantidad_accesos_simultaneos =~ /[^\d]/)
+	{
+		&return_error_mysql ("Error en el proceso", "La cantidad de accesos simult&aacute;neos debe ser un valor num&eacute;rico entero", "")
+	}
+
+	if ($cantidad_horas =~ /[^\d]/)
+	{
+		&return_error_mysql ("Error en el proceso", "La cantidad de horas debe ser un valor num&eacute;rico entero", "")
+	}
+
+	if ($cantidad_e_mail =~ /[^\d]/)
+	{
+		&return_error_mysql ("Error en el proceso", "La cantidad de direcciones de correo electr&oacute;nico debe ser un valor num&eacute;rico entero", "")
+	}
+
+	$costo_tiempo_excedente =~ s/\,/\./g;
+	if (($costo_tiempo_excedente eq "") || ($costo_tiempo_excedente !~ /^\d+\.?\d*?$/))
+	{
+		&return_error_mysql ("Error en el proceso", "El costo del tiempo excedente debe existir, y debe ser un valor num&eacute;rico", "")
+	}
+
+
+	############################
+	# Acomoda valores del FORM #
+	############################
+
+	$nombre = &acomodar_case($nombre);
+	if ($cantidad_accesos_simultaneos eq "")
+	{
+		$cantidad_accesos_simultaneos = 1;
+	}
+	if ($cantidad_horas eq "")
+	{
+		$cantidad_horas = 999;
+		$cantidad_horas_msg = "Sin l&iacute;mite";
+	}
+	if ($cantidad_e_mail eq "")
+	{
+		$cantidad_e_mail = 1;
+	}
+
+	if ($incluye_navegacion eq "on")
+	{
+		$incluye_navegacion = "Si";
+	}
+	else
+	{
+		$incluye_navegacion = "No";
+	}
+
+	if ($incluye_hosting eq "on")
+	{
+		$incluye_hosting = "Si";
+	}
+	else
+	{
+		$incluye_hosting = "No";
+	}
+
+	print <<body_alta;
+
+  <FORM ACTION="alta-plan-final.html" METHOD="post\">
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <INPUT TYPE="hidden" NAME="nombre" VALUE="$nombre">
+   <INPUT TYPE="hidden" NAME="primer_vencimiento" VALUE="$primer_vencimiento">
+   <INPUT TYPE="hidden" NAME="segundo_vencimiento" VALUE="$segundo_vencimiento">
+   <INPUT TYPE="hidden" NAME="tercer_vencimiento" VALUE="$tercer_vencimiento">
+   <INPUT TYPE="hidden" NAME="cantidad_accesos_simultaneos" VALUE="$cantidad_accesos_simultaneos">
+   <INPUT TYPE="hidden" NAME="cantidad_horas" VALUE="$cantidad_horas">
+   <INPUT TYPE="hidden" NAME="cantidad_e_mail" VALUE="$cantidad_e_mail">
+   <INPUT TYPE="hidden" NAME="costo_tiempo_excedente" VALUE="$costo_tiempo_excedente">
+   <INPUT TYPE="hidden" NAME="incluye_navegacion" VALUE="$incluye_navegacion">
+   <INPUT TYPE="hidden" NAME="incluye_hosting" VALUE="$incluye_hosting">
+   <TABLE COOL BORDER="1" CELLPADDING="0" CELLSPACING="0" ALIGN="center">
+
+    <TR>
+     <TD ALIGN="left" COLSPAN="4">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+        Creaci&oacute;n de un Plan (Confirmaci&oacute;n)
+        <BR>
+        Confirmar los datos:
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Nombre:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left" COLSPAN="3">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $nombre
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left" HEIGHT="10%">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Montos:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center" HEIGHT="30%">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       1er. Vencimiento:
+       <BR>
+       $primer_vencimiento
+      </FONT>
+     </TD>
+     <TD ALIGN="center" HEIGHT="30%">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       2do. Vencimiento:
+       <BR>
+       $segundo_vencimiento
+      </FONT>
+     </TD>
+     <TD ALIGN="center" HEIGHT="30%">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       3er. Vencimiento:
+       <BR>
+       $tercer_vencimiento
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left" ROWSPAN="2">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Caracter&iacute;sticas
+        <BR>
+        Generales:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Cantidad de
+       <BR>
+       Accesos Simult&aacute;neos:
+       $cantidad_accesos_simultaneos
+      </FONT>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Cantidad de Horas:
+       <BR>
+       $cantidad_horas_msg
+      </FONT>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Cantidad de direcciones
+       <BR>
+       de correo electr&oacute;nico:
+       $cantidad_e_mail
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Costo del tiempo excedente:
+       <BR>
+       $costo_tiempo_excedente
+      </FONT>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Incluye Navegaci&oacute;n:
+       <BR>
+       $incluye_navegacion
+      </FONT>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Incluye Hosting:
+       <BR>
+       $incluye_hosting
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="4" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="Confirmar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body_alta
+}
+else
+{
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/radadm/index.html");
+exit(0);

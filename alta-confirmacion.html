@@ -1,0 +1,504 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+
+$url = "$server/radadm/alta.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Administraci&oacute;n de Usuarios - Alta", "#ffffff");
+
+if ($http_referer =~ m/$url/)
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $apellido = param('apellido');
+	my $nombre = param('nombre');
+	my $sexo = param('sexo');
+	my $documento = param('documento');
+	my $usuario = param('usuario');
+	my $password = param('password');
+	my $direccion = param('direccion');
+	my $localidad = param('localidad');
+	my $codigopostal = param('codigopostal');
+	my $telefono = param('telefono');
+	my $tipoiva = param('tipoiva');
+	my $cuit = param('cuit');
+	my $plan = param('plan');
+	my $grupo = param('grupo');
+	my $estado = param('estado');
+	my $mora = param('mora');
+	my $fechaalta = param('fechaalta');
+	my $agente = param('agente');
+	my $cuenta_hosting = param('cuenta_hosting');
+	my $cantidad_e_mail = 0;
+	my $contador = 2;
+	my $acceso_simultaneo = 0;
+	my @e_mail_cuenta = ();
+	my @e_mail_password = ();
+	my @elementos_plan = ();
+	my $variable = "";
+	my $nivel = "";
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	$nivel = &obtener_nivel($wwwuser);
+	if ($nivel eq "Tareas de Consulta")
+	{
+		&return_error_mysql ("Error en el proceso", "No tiene permisos para acceder a esta opci&oacute;n del men&uacute;", "")
+	}
+
+	@elementos_plan = split /,/, $plan;
+	foreach $elementos_plan (@elementos_plan)
+	{
+		if ($elementos_plan =~ /E-mail/)
+		{
+			($cantidad_e_mail) = ($elementos_plan =~ /\s([^E]*)/);
+		}
+		if ($elementos_plan =~ /Acceso/)
+		{
+			($acceso_simultaneo) = ($elementos_plan =~ /:\s([^A]*)/);
+		}
+	}
+
+	#####################################
+	# Chequea si el username esta vacio #
+	#####################################
+	if ($acceso_simultaneo != 0)
+	{
+		if ($usuario eq "")
+		{
+			&return_error_mysql ("Error en el proceso", "No se ingres&oacute; nombre de usuario", "")
+		}
+
+		############################################
+		# Chequea si el username ya esta utilizado #
+		############################################
+		if (&usuario_existente_radius($usuario))
+		{
+			&return_error_mysql ("Error en el proceso", "El nombre de usuario <b> $usuario </b> ya est&aacute; ocupado", "")
+		}
+
+		################################################
+		# Chequea si la password tiene un largo minimo #
+		################################################
+		if ($password !~ m/(.{$tamanio_minimo_contrasenia})/)
+		{
+			&return_error_mysql ("Error en el proceso", "Es conveniente que la contrase&ntilde;a tenga al menos $tamanio_minimo_contrasenia caracteres de largo", "")
+		}
+	}
+
+	$e_mail_cuenta[1] = param('e_mail_cuenta_1');
+	if ($e_mail_cuenta[1] eq "")
+	{
+		$e_mail_cuenta[1] = $usuario;
+	}
+	if ($e_mail_cuenta[1] eq "")
+	{
+		&return_error_mysql ("Error en el proceso", "No se ingres&oacute; nombre de usuario", "")
+	}
+	if (&usuario_existente_so($e_mail_cuenta[1]))
+	{
+		&return_error_mysql ("Error en el proceso", "El nombre de usuario <b> $e_mail_cuenta[1] </b> ya est&aacute; ocupado", "")
+	}
+	
+	$e_mail_password[1] = param('e_mail_password_1');
+	if ($e_mail_password[1] eq "")
+	{
+		$e_mail_password[1] = $password;
+	}
+	if ($e_mail_password[1] !~ m/(.{$tamanio_minimo_contrasenia})/)
+	{
+		&return_error_mysql ("Error en el proceso", "Es conveniente que la contrase&ntilde;a tenga al menos $tamanio_minimo_contrasenia caracteres de largo: $e_mail_password[1]", "")
+	}
+
+	#################################################################
+	# Obtiene los datos de e_mail, y chequea si ya estan utilizados #
+	#################################################################
+	while ($contador <= $cantidad_e_mail)
+	{
+		$variable = "e_mail_cuenta_".$contador;
+		$e_mail_cuenta[$contador] = param($variable);
+
+		if ($e_mail_cuenta[$contador] eq "")
+		{
+			&return_error_mysql ("Error en el proceso", "No se ingres&oacute; nombre de usuario", "")
+		}
+		############################################
+		# Chequea si el username ya esta utilizado #
+		############################################
+		if (&usuario_existente_so($e_mail_cuenta[$contador]))
+		{
+			&return_error_mysql ("Error en el proceso", "El nombre de usuario <b> $e_mail_cuenta[$contador] </b> ya est&aacute; ocupado", "")
+		}
+
+		$variable = "e_mail_password_".$contador;
+		$e_mail_password[$contador] = param($variable);
+		################################################
+		# Chequea si la password tiene un largo minimo #
+		################################################
+		if ($e_mail_password[$contador] !~ m/(.{$tamanio_minimo_contrasenia})/)
+		{
+			&return_error_mysql ("Error en el proceso", "Es conveniente que la contrase&ntilde;a tenga al menos $tamanio_minimo_contrasenia caracteres de largo: $e_mail_password[$contador]", "")
+		}
+
+		$contador++;
+	}
+
+	print "  <FORM ACTION=\"alta-final.html\" METHOD=\"post\">\n";
+	$contador = 1;
+	while ($contador <= $cantidad_e_mail)
+	{
+		print "   <INPUT TYPE=\"hidden\" NAME=\"e_mail_cuenta_".$contador."\" VALUE=\"$e_mail_cuenta[$contador]\">\n";
+		print "   <INPUT TYPE=\"hidden\" NAME=\"e_mail_password_".$contador."\" VALUE=\"$e_mail_password[$contador]\">\n";
+
+		$contador++;
+	}
+	print <<body_alta;
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <INPUT TYPE="hidden" NAME="apellido" VALUE="$apellido">
+   <INPUT TYPE="hidden" NAME="nombre" VALUE="$nombre">
+   <INPUT TYPE="hidden" NAME="sexo" VALUE="$sexo">
+   <INPUT TYPE="hidden" NAME="documento" VALUE="$documento">
+   <INPUT TYPE="hidden" NAME="usuario" VALUE="$usuario">
+   <INPUT TYPE="hidden" NAME="password" VALUE="$password">
+   <INPUT TYPE="hidden" NAME="direccion" VALUE="$direccion">
+   <INPUT TYPE="hidden" NAME="localidad" VALUE="$localidad">
+   <INPUT TYPE="hidden" NAME="codigopostal" VALUE="$codigopostal">
+   <INPUT TYPE="hidden" NAME="telefono" VALUE="$telefono">
+   <INPUT TYPE="hidden" NAME="tipoiva" VALUE="$tipoiva">
+   <INPUT TYPE="hidden" NAME="cuit" VALUE="$cuit">
+   <INPUT TYPE="hidden" NAME="plan" VALUE="$plan">
+   <INPUT TYPE="hidden" NAME="grupo" VALUE="$grupo">
+   <INPUT TYPE="hidden" NAME="estado" VALUE="$estado">
+   <INPUT TYPE="hidden" NAME="mora" VALUE="$mora">
+   <INPUT TYPE="hidden" NAME="fechaalta" VALUE="$fechaalta">
+   <INPUT TYPE="hidden" NAME="agente" VALUE="$agente">
+   <INPUT TYPE="hidden" NAME="cuenta_hosting" VALUE="$cuenta_hosting">
+   <TABLE COOL BORDER="1" CELLPADDING="0" CELLSPACING="0" ALIGN="center">
+
+    <TR>
+     <TD ALIGN="left" COLSPAN="2">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+        Datos Personales (Confirmaci&oacute;n)
+        <BR>
+        Confirmar los datos:
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Apellido:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $apellido
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Nombre:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $nombre
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Sexo:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $sexo
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Documento:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $documento
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Direcci&oacute;n:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $direccion
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Localidad:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $localidad
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        C&oacute;digo Postal:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $codigopostal
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Tel&eacute;fono:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $telefono
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        IVA:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Tipo de IVA: 
+       &nbsp;
+       $tipoiva
+       &nbsp; &nbsp; &nbsp;
+       CUIT: 
+       &nbsp;
+       $cuit
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Plan contratado:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $plan
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Nombre de Usuario:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $usuario
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Contrase&ntilde;a:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $password
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Agente de Ventas:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $agente
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Direcciones de E-mail:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+body_alta
+	$contador = 1;
+	while ($contador <= $cantidad_e_mail)
+	{
+		print "       <B>\n";
+		print "        Cuenta $contador )\n";
+		print "       </B>\n";
+		print "       &nbsp; &nbsp;\n";
+		print "       Usuario: $e_mail_cuenta[$contador]\n";
+		print "       &nbsp; &nbsp;\n";
+		print "       Password: $e_mail_password[$contador]\n";
+		print "       <BR>\n";
+		$contador++;
+	}
+
+	print <<body_alta;
+      </FONT>
+     </TD>
+    </TR>
+body_alta
+	if ($nivel eq "Acceso Total")
+	{
+		print <<body_alta;
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Grupo de Usuario:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $grupo
+      </FONT>
+     </TD>
+    </TR>
+body_alta
+	}
+
+	print <<body_alta;
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Estado:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $estado
+       &nbsp; &nbsp; &nbsp; &nbsp;
+       Fecha de Alta
+       &nbsp;
+       $fechaalta
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Acci&oacute;n al excederse
+        <BR>
+        en el tiempo de consumo:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="center">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       $mora
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="Confirmar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body_alta
+}
+else
+{
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/radadm/index.html");
+exit(0);

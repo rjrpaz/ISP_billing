@@ -1,0 +1,217 @@
+#!/usr/bin/perl -w
+
+use freeradius;
+use CGI qw(:standard escapeHTML);
+
+$url = "$server/radadm/index.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Men&uacute; General", "#ffffff");
+
+if (defined($http_referer) && ($http_referer =~ m/$url/))
+{
+	my $wwwuser = param('wwwuser');
+	my $wwwpass = param('wwwpass');
+	my $nivel = "";
+
+	if (!(&chequeo_password($wwwuser, $wwwpass)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+	$nivel = &obtener_nivel($wwwuser);
+
+	print <<body;
+  <FORM ACTION="menu.html" METHOD="post\">
+   <INPUT TYPE="hidden" NAME="wwwuser" VALUE="$wwwuser">
+   <INPUT TYPE="hidden" NAME="wwwpass" VALUE="$wwwpass">
+   <TABLE COOL BORDER="0" CELLPADDING="0" CELLSPACING="0" ALIGN="center">
+
+    <TR>
+     <TD COLSPAN="2" ALIGN="center" CONTENT VALIGN="bottom">
+      <H1>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular">
+        Men&uacute; General
+       </FONT>
+      </H1>
+     </TD>
+    </TR>
+body
+
+	if ($nivel eq "Acceso Total")
+	{
+		print <<body;
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="menu" VALUE="AgentesVenta">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Administraci&oacute;n de Agentes de Ventas
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2" HEIGHT="10">
+      &nbsp;
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="menu" VALUE="AdmClaves">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Administraci&oacute;n de Operadores
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2" HEIGHT="10">
+      &nbsp;
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="menu" VALUE="DefPlanes">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Definici&oacute;n de Planes
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2" HEIGHT="10">
+      &nbsp;
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="menu" VALUE="GruposUsuarios">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Definici&oacute;n de Grupos de Usuarios
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2" HEIGHT="10">
+      &nbsp;
+     </TD>
+    </TR>
+
+body
+	}
+
+	print <<body;
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="menu" VALUE="AdmUsuarios" CHECKED>
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Administraci&oacute;n de Usuarios
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR HEIGHT="20" cntrlrow>
+     <TD HEIGHT="20" ALIGN="right" XPOS="0" CONTENT VALIGN="middle" CSHEIGHT="32" NOWRAP COLSPAN="2">
+     </TD>
+    </TR>
+
+    <TR>
+    <TR>
+     <TD COLSPAN="2" ALIGN="center" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="continuar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body
+}
+else
+{
+	print <<body;
+  <FORM ACTION="index.html" METHOD="post\">
+   <TABLE COOL BORDER="0" CELLPADDING="0" CELLSPACING="0" ALIGN="center">
+
+    <TR>
+     <TD COLSPAN="2" ALIGN="center" CONTENT VALIGN="bottom">
+      <H1>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular">
+        Administraci&oacute;n de Usuarios
+        <BR>
+        Ingrese usuario y contrase&ntilde;a de Administraci&oacute;n
+       </FONT>
+      </H1>
+     </TD>
+    </TR>
+
+    <TR HEIGHT="20" cntrlrow>
+     <TD HEIGHT="20" ALIGN="right" XPOS="0" CONTENT VALIGN="middle" CSHEIGHT="32" NOWRAP COLSPAN="2">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Usuario:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left" CONTENT VALIGN="center">
+      <INPUT TYPE="text" NAME="wwwuser" SIZE="20">
+     </TD>
+    </TR>
+    <TR>
+     <TD ALIGN="left" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Contrase&ntilde;a: 
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left" CONTENT VALIGN="center">
+      <INPUT TYPE="password" NAME="wwwpass" SIZE="20">
+     </TD>
+    </TR>
+
+    <TR HEIGHT="20" cntrlrow>
+     <TD HEIGHT="20" ALIGN="right" XPOS="0" CONTENT VALIGN="middle" CSHEIGHT="32" NOWRAP COLSPAN="2">
+     </TD>
+    </TR>
+
+    <TR>
+    <TR>
+     <TD COLSPAN="2" ALIGN="center" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="continuar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body
+}
+&tail_html("/radadm/index.html");
+
+exit;
